@@ -1,0 +1,7 @@
+.agent
+qe/venv
+plans
+__pycache__
+qe/coir/__pycache__
+qe/coir/results.json
+qe/results.json

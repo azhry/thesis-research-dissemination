@@ -1,0 +1,85 @@
+% This must be in the first 5 lines to tell arXiv to use pdfLaTeX, which is strongly recommended.
+\pdfoutput=1
+
+\documentclass[11pt]{article}
+
+% Remove the "review" option to generate the final version.
+% NOTE: You will need to download the official EMNLP style files 
+% (e.g., emnlp2023.sty or acl.sty) and place them in the same directory.
+\usepackage[review]{acl}
+
+% Standard package includes
+\usepackage{times}
+\usepackage{latexsym}
+
+% For proper rendering and hyphenation of words containing Latin characters
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+
+% Improve the layout of the manuscript
+\usepackage{microtype}
+
+% Improve the aesthetics of text in the typewriter font
+\usepackage{inconsolata}
+
+\title{Improving Indonesian Code Search via Technical Query Expansion and \\ Cross-Encoder Re-ranking with Multilingual E5}
+
+\author{Azhary Arliansyah \\
+  Institution / Address line 1 \\
+  \texttt{email@domain} \\}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Code search for low-resource languages like Indonesian presents a significant challenge due to the linguistic gap between natural language queries and English-centric programming identifiers. This paper proposes a multi-stage retrieval pipeline designed to bridge this gap. Our approach utilizes Multilingual E5 (mE5) text embeddings for establishing a semantic shared space, Technical Query Expansion (TQE) via Large Language Models (LLMs) to enrich queries with English technical terms, and a Cross-Encoder for precise token-level interactions. We detail the foundational architecture, the role of pseudo-document generation in expanding queries, and the importance of cross-encoder re-ranking for improving retrieval precision. Our methods demonstrate a viable pathway towards robust and effective cross-lingual code search.
+\end{abstract}
+
+\section{Introduction}
+A major challenge in code search is bridging the semantic and lexical gaps between a developer's natural language query and the technical concepts within code snippets \cite{cosqa2021}. This issue is amplified in non-English queries, particularly Indonesian, where there is an additional translation boundary between the query and English-based programming identifiers. Simple literal translation often fails to capture the correct functional equivalence. This paper presents an integrated methodology to improve Indonesian code search by combining dense cross-lingual representations, technical concept enrichment via Large Language Models (LLMs), and high-precision second-stage re-ranking. 
+
+\section{Methodology}
+To significantly improve Indonesian code search, we implement a multi-stage retrieval pipeline bridging the linguistic gap. The pipeline consists of the following three core components.
+
+\subsection{First-Stage Retrieval with Multilingual E5 (mE5)}
+We leverage the Multilingual E5 (mE5) model \cite{mE52024} for dense representation. The mE5-large-instruct variant allows both Indonesian queries and English code to be embedded into a shared semantic vector space, recognizing functional equivalents without explicit translation. 
+\begin{itemize}
+    \item \textbf{Instruction Tuning:} Using the ``instruct'' variant, we prepend ``query:'' to natural language inputs and ``passage:'' to code snippets to maximize retrieval performance.
+    \item \textbf{Robustness to Translation Noise:} mE5 demonstrates significant stability and robustness against translation errors compared to monolingual models, making it ideal for Indonesian cross-lingual retrieval.
+\end{itemize}
+
+\subsection{Technical Query Expansion (TQE) via LLMs}
+To further bridge the vocabulary mismatch, we apply Technical Query Expansion (TQE):
+\begin{itemize}
+    \item \textbf{Pseudo-Document Generation (HyDE):} An LLM (e.g., Gemma or GPT-4) generates a hypothetical English code snippet or technical explanation based on the Indonesian query \cite{query2doc2023}.
+    \item \textbf{Technical Keyword/Entity Enrichment:} We expand queries by mapping Indonesian descriptions to specific English technical terms \cite{kar2024}. For example, expanding ``cara simpan data'' to include ``SQLAlchemy'', ``CRUD'', or ``commit''.
+    \item \textbf{Rationale-Rich Descriptions:} We apply Chain-of-Thought (CoT) prompting to enable the expansion module to explain the programming logic step-by-step in English, introducing contextually relevant identifiers and boosting recall.
+\end{itemize}
+
+\subsection{Second-Stage Precision with Cross-Encoder Re-ranking}
+While mE5 establishes a strong initial retrieval base, dual-encoders often miss fine-grained token interactions.
+\begin{itemize}
+    \item \textbf{Joint Token Interaction:} After retrieving the top candidate snippets, a Cross-Encoder jointly processes the query and each snippet. This captures specific contextual word usage that dense models might overlook.
+    \item \textbf{Hard Negative Training:} The cross-encoder is fine-tuned using hard negatives---snippets that are lexically similar to the query but functionally incorrect.
+    \item \textbf{Multilingual Cross-Encoders:} Specialized models like mmarco-mMiniLMv2-L12 maintain high re-ranking precision across the Indonesian-English language boundary.
+\end{itemize}
+
+\section{Related Work}
+
+\paragraph{Unified Models and Embeddings}
+Recent advances in cross-modal pre-training such as UniXcoder \cite{unixcoder2022} and CodeBERT \cite{codebert2020} laid the groundwork for aligning programming and natural languages. The development of multi-granularity multilingual models, such as BGE-M3 \cite{bgeM32024}, significantly enhanced performance for long-context cross-lingual tasks. The Mr. TyDi benchmark \cite{mrtydi2021} further established essential metrics for dense retrieval across diverse languages, including Indonesian.
+
+\paragraph{Query Expansion and Technical Enrichment}
+The vocabulary mismatch in code search can be mitigated through query expansion. \citet{query2doc2023} introduced an LLM-based query expansion methodology using hypothetical document generation, while \citet{kar2024} utilized structured, relational knowledge integration to improve retrieval. 
+
+\paragraph{Benchmarks and Re-ranking}
+The evaluation of cross-lingual code intelligence is supported by datasets like XLCoST \cite{xlcost2022}, CodeTransOcean \cite{codetrans2023}, and code search benchmarks like CoSQA \cite{cosqa2021}, CoSQA+ \cite{cosqaplus2024}, and COIR \cite{coir2025}. Meanwhile, advanced re-ranking and retrieval heuristics, including investigations into cross-lingual ranking drivers \cite{whatdrives2025} and optimized encoder-decoder paradigms like ED2LM \cite{ed2lm2022}, offer mechanisms to improve precise candidate selection. Our work expands on findings by \citet{azhary2025} regarding cross-lingual Python retrieval from Indonesian queries using LLMs and mE5.
+
+\section{Conclusion}
+This paper outlined a robust multi-stage retrieval architecture tailored for Indonesian-to-English code search. Future work will entail comprehensive experimental evaluation on these components, assessing latency-efficiency trade-offs and scaling to additional programming paradigms.
+
+% Entries for the entire Anthology, followed by custom entries
+\bibliography{custom}
+\bibliographystyle{acl_natbib}
+
+\end{document}
