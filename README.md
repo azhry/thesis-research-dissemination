@@ -43,10 +43,6 @@ research-dissemination/
 │   │   └── evaluation.py       # Evaluation metrics
 │   ├── requirements.txt        # Python dependencies
 │   └── setup.py                # Package setup
-├── plans/                      # Research plans
-│   ├── implementation_plan.md
-│   ├── query_expansion_indonesian_ir_plan.md
-│   └── cross_encoder_reranker_plan.md
 ├── latex/                      # LaTeX paper files
 └── sources/                   # Research source materials
 ```
@@ -309,8 +305,4 @@ This project is for research purposes. See `qe/LICENSE` for details.
 
 ## Contact
 
-For questions or issues, please contact the research team.
-
----
-
-**Note**: This README covers the Query Expansion module. For Cross-Encoder Re-ranking implementation, see `plans/cross_encoder_reranker_plan.md`.
+For questions or issues, please [create a GitHub Issue](https://github.com/azhry/thesis-research-dissemination/issues).
