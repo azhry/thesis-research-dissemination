@@ -1,0 +1,122 @@
+{
+  "dataset": "cosqa",
+  "method": "mmmini",
+  "metrics": {
+    "ndcg@10": 1.0,
+    "map@10": 1.0,
+    "mrr": 1.0,
+    "num_queries": 10
+  },
+  "results": [
+    {
+      "query_id": "0",
+      "query": "python code to write bool value 1",
+      "reranked": [
+        {
+          "id": "",
+          "text": "def _unzip_handle(handle):\n    \"\"\"Transparently unzip the file handle\"\"\"\n    if isinstance(handle, basestring):\n        handle = _gzip_open_filename(handle)\n    else:\n        handle = _gzip_open_handle(handle)\n    return handle",
+          "cross_encoder_score": -11.262064933776855
+        }
+      ]
+    },
+    {
+      "query_id": "1",
+      "query": "\"python how to manipulate clipboard\"",
+      "reranked": [
+        {
+          "id": "",
+          "text": "def _unzip_handle(handle):\n    \"\"\"Transparently unzip the file handle\"\"\"\n    if isinstance(handle, basestring):\n        handle = _gzip_open_filename(handle)\n    else:\n        handle = _gzip_open_handle(handle)\n    return handle",
+          "cross_encoder_score": -10.191023826599121
+        }
+      ]
+    },
+    {
+      "query_id": "2",
+      "query": "python colored output to html",
+      "reranked": [
+        {
+          "id": "",
+          "text": "def _unzip_handle(handle):\n    \"\"\"Transparently unzip the file handle\"\"\"\n    if isinstance(handle, basestring):\n        handle = _gzip_open_filename(handle)\n    else:\n        handle = _gzip_open_handle(handle)\n    return handle",
+          "cross_encoder_score": -11.09544563293457
+        }
+      ]
+    },
+    {
+      "query_id": "3",
+      "query": "python \"create directory\" using \"relative path\"",
+      "reranked": [
+        {
+          "id": "",
+          "text": "def _unzip_handle(handle):\n    \"\"\"Transparently unzip the file handle\"\"\"\n    if isinstance(handle, basestring):\n        handle = _gzip_open_filename(handle)\n    else:\n        handle = _gzip_open_handle(handle)\n    return handle",
+          "cross_encoder_score": -11.069341659545898
+        }
+      ]
+    },
+    {
+      "query_id": "4",
+      "query": "python column of an array",
+      "reranked": [
+        {
+          "id": "",
+          "text": "def _unzip_handle(handle):\n    \"\"\"Transparently unzip the file handle\"\"\"\n    if isinstance(handle, basestring):\n        handle = _gzip_open_filename(handle)\n    else:\n        handle = _gzip_open_handle(handle)\n    return handle",
+          "cross_encoder_score": -11.305327415466309
+        }
+      ]
+    },
+    {
+      "query_id": "5",
+      "query": "python calling a property returns \"property object\"",
+      "reranked": [
+        {
+          "id": "",
+          "text": "def _unzip_handle(handle):\n    \"\"\"Transparently unzip the file handle\"\"\"\n    if isinstance(handle, basestring):\n        handle = _gzip_open_filename(handle)\n    else:\n        handle = _gzip_open_handle(handle)\n    return handle",
+          "cross_encoder_score": -9.521225929260254
+        }
+      ]
+    },
+    {
+      "query_id": "6",
+      "query": "python combine wav file into one as separate channels",
+      "reranked": [
+        {
+          "id": "",
+          "text": "def _unzip_handle(handle):\n    \"\"\"Transparently unzip the file handle\"\"\"\n    if isinstance(handle, basestring):\n        handle = _gzip_open_filename(handle)\n    else:\n        handle = _gzip_open_handle(handle)\n    return handle",
+          "cross_encoder_score": -11.395581245422363
+        }
+      ]
+    },
+    {
+      "query_id": "7",
+      "query": "+how to use range with a dictionary python",
+      "reranked": [
+        {
+          "id": "",
+          "text": "def _unzip_handle(handle):\n    \"\"\"Transparently unzip the file handle\"\"\"\n    if isinstance(handle, basestring):\n        handle = _gzip_open_filename(handle)\n    else:\n        handle = _gzip_open_handle(handle)\n    return handle",
+          "cross_encoder_score": -11.350728988647461
+        }
+      ]
+    },
+    {
+      "query_id": "8",
+      "query": "python compare timespan to number",
+      "reranked": [
+        {
+          "id": "",
+          "text": "def _unzip_handle(handle):\n    \"\"\"Transparently unzip the file handle\"\"\"\n    if isinstance(handle, basestring):\n        handle = _gzip_open_filename(handle)\n    else:\n        handle = _gzip_open_handle(handle)\n    return handle",
+          "cross_encoder_score": -11.410504341125488
+        }
+      ]
+    },
+    {
+      "query_id": "9",
+      "query": "1d array in char datatype in python",
+      "reranked": [
+        {
+          "id": "",
+          "text": "def _unzip_handle(handle):\n    \"\"\"Transparently unzip the file handle\"\"\"\n    if isinstance(handle, basestring):\n        handle = _gzip_open_filename(handle)\n    else:\n        handle = _gzip_open_handle(handle)\n    return handle",
+          "cross_encoder_score": -11.347688674926758
+        }
+      ]
+    }
+  ]
+}
