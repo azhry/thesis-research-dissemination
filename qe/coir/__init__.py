@@ -9,6 +9,10 @@ try:
 except ImportError as e:
     _HAS_ORIGINAL = False
     print(f"Warning: Original CoIR modules not available: {e}")
+except Exception as e:
+    # Handle other errors like from evaluation.py importing faiss
+    _HAS_ORIGINAL = False
+    print(f"Warning: Original CoIR modules not available: {e}")
 
 # Query Expansion modules
 from .config import QEConfig, config

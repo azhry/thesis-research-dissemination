@@ -103,8 +103,20 @@ class DenseRetriever:
             Tuple of (embeddings, ids)
         """
         # Extract text and IDs
-        texts = [doc.get("text", "") or doc.get("code", "") for doc in corpus]
-        doc_ids = [doc.get("id", str(i)) for i, doc in enumerate(corpus)]
+        # Handle different corpus formats: dict, list of dicts, or list of strings
+        if isinstance(corpus, dict):
+            # Corpus is {id: {text: ...}} format
+            items = list(corpus.items())
+            texts = [item[1].get("text", "") or item[1].get("code", "") for item in items]
+            doc_ids = [item[0] for item in items]
+        elif corpus and isinstance(corpus[0], str):
+            # Corpus is list of strings
+            texts = corpus
+            doc_ids = [str(i) for i in range(len(corpus))]
+        else:
+            # Corpus is list of dicts
+            texts = [doc.get("text", "") or doc.get("code", "") if isinstance(doc, dict) else str(doc) for doc in corpus]
+            doc_ids = [doc.get("id", str(i)) if isinstance(doc, dict) else str(i) for i, doc in enumerate(corpus)]
         
         # Add passage prefix
         prefixed_texts = [self.PASSAGE_PREFIX + t for t in texts]
@@ -323,7 +335,11 @@ class BM25Retriever:
         
         # Count document frequencies
         for doc in corpus:
-            text = doc.get("text", "") or doc.get("code", "")
+            # Handle both dict and string corpus formats
+            if isinstance(doc, dict):
+                text = doc.get("text", "") or doc.get("code", "")
+            else:
+                text = str(doc)
             tokens = text.lower().split()
             self.doc_len.append(len(tokens))
             
