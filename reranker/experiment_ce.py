@@ -3,23 +3,49 @@ Standalone Cross-Encoder Re-ranking Experiment Runner.
 
 This script runs cross-encoder re-ranking experiments using
 benchmark datasets from CoIR (Code Information Retrieval) benchmark.
+Benchmarks both English and Indonesian queries and saves results to CSV.
 """
 
 import argparse
 import logging
 import json
+import sys
 import csv
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
+# Add qe directory to path for coir imports
+qe_path = Path(__file__).parent.parent / "qe"
+sys.path.insert(0, str(qe_path))
+
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
 
-# Import our modules
-from .cross_encoder_base import CrossEncoderReranker
-from .mmmini_reranker import MMMiniReranker, MultilingualMMMiniReranker
-from .xlm_reranker import XLMReranker, MBERTReranker
-from .fine_tuner import CrossEncoderFineTuner, FineTuningConfig, create_hard_negatives
+# Import our modules - handle both package and direct execution
+try:
+    from reranker.cross_encoder_base import CrossEncoderReranker
+except ImportError:
+    try:
+        from .cross_encoder_base import CrossEncoderReranker
+    except ImportError:
+        from cross_encoder_base import CrossEncoderReranker
+
+try:
+    from reranker.mmmini_reranker import MMMiniReranker, MultilingualMMMiniReranker
+except ImportError:
+    try:
+        from .mmmini_reranker import MMMiniReranker, MultilingualMMMiniReranker
+    except ImportError:
+        from mmmini_reranker import MMMiniReranker, MultilingualMMMiniReranker
+
+try:
+    from reranker.xlm_reranker import XLMReranker, MBERTReranker
+except ImportError:
+    try:
+        from .xlm_reranker import XLMReranker, MBERTReranker
+    except ImportError:
+        from xlm_reranker import XLMReranker, MBERTReranker
 
 # Setup logging
 logging.basicConfig(
@@ -29,406 +55,347 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# Benchmark dataset configurations
-BENCHMARK_CONFIGS = {
-    "cosqa": {
-        "name": "CoSQA",
-        "description": "Code Search Q&A - Natural language to code",
-        "language": "English",
-        "task_type": "code-retrieval"
-    },
-    "codetrans_dl": {
-        "name": "CodeTrans-DL",
-        "description": "Code Translation Deep Learning",
-        "language": "Multiple",
-        "task_type": "code-translation"
-    },
-    "stackoverflow_qa": {
-        "name": "StackOverflow QA",
-        "description": "StackOverflow Question Answering",
-        "language": "English",
-        "task_type": "code-retrieval"
-    },
-}
-
-
-def load_benchmark_data(
-    dataset_name: str = "cosqa",
-    split: str = "test",
-    sample_size: Optional[int] = None
-) -> tuple:
-    """
-    Load benchmark dataset from CoIR.
+def load_cosqa_with_translations():
+    """Load COSQA with Indonesian translations."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent / "qe"))
     
-    CoIR format: separate subsets for queries, corpus, and qrels
-    """
-    logger.info(f"Loading benchmark dataset: {dataset_name}")
-    
-    try:
-        from datasets import load_dataset
-        from coir.data_loader import load_data_from_hf
-        
-        # Try to load properly from CoIR
-        try:
-            corpus, queries, qrels = load_data_from_hf(dataset_name)
-            
-            # Convert corpus to list format
-            corpus_list = [
-                {"id": doc_id, "text": doc_data.get("text", "")}
-                for doc_id, doc_data in corpus.items()
-            ]
-            
-            # Convert queries dict to list with id and text
-            queries_list = [
-                {"id": qid, "query": qtext, "text": qtext}
-                for qid, qtext in queries.items()
-            ]
-            
-            # Convert qrels to ground truth format
-            relevance_labels = {}
-            for qid, doc_scores in qrels.items():
-                # Get all relevant doc IDs (score > 0)
-                relevant_docs = [doc_id for doc_id, score in doc_scores.items() if score > 0]
-                if relevant_docs:
-                    relevance_labels[qid] = relevant_docs
-            
-            # Optionally limit queries
-            if sample_size and sample_size < len(queries_list):
-                queries_list = queries_list[:sample_size]
-                # Also limit qrels
-                query_ids = [q["id"] for q in queries_list]
-                relevance_labels = {k: v for k, v in relevance_labels.items() if k in query_ids}
-            
-            logger.info(f"Loaded {len(queries_list)} queries, {len(corpus_list)} docs, {len(relevance_labels)} qrels")
-            return queries_list, corpus_list, relevance_labels
-            
-        except Exception as e:
-            logger.warning(f"Failed to load with load_data_from_hf: {e}")
-        
-        # Fallback to direct dataset loading
-        queries = []
-        corpus_dict = {}
-        relevance_labels = {}
-        
-        # Load corpus
-        logger.info(f"Loading corpus for {dataset_name}...")
-        try:
-            corpus_ds = load_dataset(f"CoIR-Retrieval/{dataset_name}-queries-corpus", "corpus", split="corpus")
-            logger.info(f"Corpus: {len(corpus_ds)} samples")
-            for idx, item in enumerate(tqdm(corpus_ds, desc="Processing corpus")):
-                doc_id = str(item.get('doc-id', item.get('doc_id', item.get('_id', idx))))
-                doc_text = item.get('text', item.get('code', str(item)))
-                if not doc_id or doc_id == '':
-                    doc_id = str(idx)
-                corpus_dict[doc_id] = {'id': doc_id, 'text': doc_text}
-        except Exception as e:
-            logger.warning(f"Could not load corpus: {e}")
-        
-        # Load queries
-        logger.info(f"Loading queries for {dataset_name}...")
-        try:
-            queries_ds = None
-            try:
-                queries_ds = load_dataset(f"CoIR-Retrieval/{dataset_name}-queries-corpus", "queries", split="queries")
-            except:
-                try:
-                    queries_ds = load_dataset(f"CoIR-Retrieval/{dataset_name}", "default", split="test")
-                except:
-                    try:
-                        queries_ds = load_dataset(f"CoIR-Retrieval/{dataset_name}", split="test")
-                    except:
-                        pass
-            
-            if queries_ds:
-                logger.info(f"Queries: {len(queries_ds)} samples")
-                query_items = list(queries_ds)
-                if sample_size:
-                    query_items = query_items[:sample_size]
-                
-                for idx, item in enumerate(query_items):
-                    query_id = str(item.get('query-id', item.get('query_id', item.get('_id', idx))))
-                    query_text = item.get('text', item.get('query', str(item)))
-                    
-                    queries.append({
-                        'id': query_id,
-                        'query': query_text,
-                        'text': query_text
-                    })
-        except Exception as e:
-            logger.warning(f"Could not load queries: {e}")
-        
-        # Load qrels
-        logger.info(f"Loading qrels for {dataset_name}...")
-        try:
-            qrels_ds = load_dataset(f"CoIR-Retrieval/{dataset_name}-qrels", "test", split="test")
-            logger.info(f"Qrels: {len(qrels_ds)} samples")
-            for item in qrels_ds:
-                query_id = str(item.get('query-id', item.get('query_id', '')))
-                doc_id = str(item.get('corpus-id', item.get('corpus_id', '')))
-                score = int(item.get('score', 1))
-                
-                if score > 0:
-                    if query_id not in relevance_labels:
-                        relevance_labels[query_id] = []
-                    relevance_labels[query_id].append(doc_id)
-        except Exception as e:
-            logger.warning(f"Could not load qrels: {e}")
-        
-        # Fallback: create pseudo relevance if no qrels
-        if not relevance_labels and corpus_dict:
-            logger.info("No qrels found, using first doc as relevant (pseudo)")
-            for q in queries:
-                first_doc_id = list(corpus_dict.keys())[0]
-                relevance_labels[q['id']] = [first_doc_id]
-        
-        corpus = list(corpus_dict.values())
-        
-        logger.info(f"Final: {len(queries)} queries, {len(corpus)} documents, {len(relevance_labels)} qrels")
-        
-        return queries, corpus, relevance_labels
-        
-    except ImportError:
-        logger.warning("datasets library not available, using sample data")
-        return load_sample_data()
-    except Exception as e:
-        logger.warning(f"Failed to load benchmark dataset: {e}")
-        import traceback
-        traceback.print_exc()
-        return load_sample_data()
-
-
-def load_sample_data() -> tuple:
-    """Load sample Indonesian queries and code corpus."""
-    indonesian_queries = [
-        {"id": "0", "query": "cara membuat fungsi di python", "text": "cara membuat fungsi di python"},
-        {"id": "1", "query": "cara menyimpan data ke database", "text": "cara menyimpan data ke database"}, 
-        {"id": "2", "query": "cara mengurutkan list di python", "text": "cara mengurutkan list di python"},
-        {"id": "3", "query": "cara membuat API dengan flask", "text": "cara membuat API dengan flask"},
-        {"id": "4", "query": "cara menggunakan pandas dataframe", "text": "cara menggunakan pandas dataframe"},
-    ]
-    
-    code_corpus = [
-        {"id": "0", "text": "def function_name(params):\n    return params"},
-        {"id": "1", "text": "import pandas as pd\ndf = pd.DataFrame(data)\ndf.to_sql('table', engine)"},
-        {"id": "2", "text": "sorted_list = sorted(items, key=lambda x: x['value'])"},
-        {"id": "3", "text": "from flask import Flask, jsonify\napp = Flask(__name__)"},
-        {"id": "4", "text": "import pandas as pd\nimport numpy as np\narr = np.array([1, 2, 3])"},
-    ]
-    
-    relevance_labels = {
-        "0": ["0"],
-        "1": ["1"],
-        "2": ["2"],
-        "3": ["3"],
-        "4": ["1", "4"],
-    }
-    
-    return indonesian_queries, code_corpus, relevance_labels
-
-
-def run_cross_encoder_reranking(
-    queries: List[Dict],
-    corpus: List[Dict[str, str]],
-    model_type: str = "mmmini",
-    top_k: int = 10,
-    device: str = "cpu"
-) -> List[Dict[str, Any]]:
-    """Run cross-encoder re-ranking."""
-    logger.info(f"Running {model_type} cross-encoder reranking...")
-    
-    if not corpus or not queries:
-        logger.error("No corpus or queries available!")
-        return []
-    
-    if model_type == "mmmini":
-        reranker = MMMiniReranker(device=device)
-    elif model_type == "mmmini_multilingual":
-        reranker = MultilingualMMMiniReranker(device=device)
-    elif model_type == "xlm":
-        reranker = XLMReranker(device=device)
+    # Load Indonesian translations
+    translations_file = Path(__file__).parent.parent / "qe" / "cosqa_queries_indonesian.csv"
+    if translations_file.exists():
+        trans_df = pd.read_csv(translations_file, sep="|")
+        translations = dict(zip(trans_df['qid'], trans_df['query_id']))
     else:
-        reranker = MMMiniReranker(device=device)
+        translations = {}
     
-    reranker.load_model()
+    # Load COSQA from HuggingFace
+    from coir.data_loader import load_data_from_hf
+    corpus, queries, qrels = load_data_from_hf("cosqa")
     
-    results = []
-    corpus_texts = [doc['text'][:512] for doc in corpus]  # Truncate for efficiency
+    # Convert to list format
+    corpus_list = [
+        {"id": doc_id, "text": doc_data.get("text", "")}
+        for doc_id, doc_data in corpus.items()
+    ]
     
-    for query_item in tqdm(queries, desc="Processing queries"):
-        query_id = query_item.get('id', 'unknown')
-        query_text = query_item.get('text', query_item.get('query', ''))[:512]
+    # Add Indonesian queries
+    queries_english = {}
+    queries_indonesian = {}
+    for qid, qtext in queries.items():
+        queries_english[qid] = qtext
+        if qid in translations:
+            queries_indonesian[qid] = translations[qid]
+        else:
+            queries_indonesian[qid] = qtext
+    
+    return corpus_list, queries_english, queries_indonesian, qrels
+
+
+def run_first_stage_retrieval(queries: Dict[str, str], corpus: List[Dict], top_k: int = 100):
+    """Run first-stage retrieval using mE5 embeddings."""
+    from coir.dense_retriever import DenseRetriever
+    
+    logger.info("Running first-stage retrieval with mE5...")
+    
+    retriever = DenseRetriever(
+        model_name="intfloat/multilingual-e5-small",
+        device="cpu"
+    )
+    
+    # Build corpus lookup by id
+    corpus_lookup = {doc['id']: doc for doc in corpus}
+    
+    results = {}
+    for qid, query in tqdm(queries.items(), desc="First-stage retrieval"):
+        retrieved = retriever.retrieve(
+            queries=[query],
+            corpus=corpus,
+            top_k=top_k,
+        )
         
-        if not query_text:
-            continue
+        # Add text to retrieved docs
+        results_with_text = []
+        for doc in retrieved[0]:
+            doc_id = doc['id']
+            if doc_id in corpus_lookup:
+                results_with_text.append({
+                    **doc,
+                    'text': corpus_lookup[doc_id].get('text', '')
+                })
+            else:
+                results_with_text.append(doc)
         
-        try:
-            scores = reranker.score(query_text, corpus_texts)
-            
-            scored_docs = [
-                {**doc, 'cross_encoder_score': float(score)}
-                for doc, score in zip(corpus, scores)
-            ]
-            
-            scored_docs.sort(key=lambda x: x['cross_encoder_score'], reverse=True)
-            
-            results.append({
-                "query_id": query_id,
-                "query": query_text,
-                "reranked": scored_docs[:top_k]
-            })
-        except Exception as e:
-            logger.warning(f"Error processing query {query_id}: {e}")
-            continue
+        results[qid] = {
+            "query": query,
+            "retrieved": results_with_text
+        }
     
     return results
 
 
-def run_baseline(
-    queries: List[Dict],
-    corpus: List[Dict[str, str]],
+def run_reranking(
+    first_stage_results: Dict,
+    reranker,
     top_k: int = 10
 ) -> List[Dict[str, Any]]:
-    """Run baseline retrieval."""
+    """Run cross-encoder reranking on first-stage results."""
     results = []
-    for query_item in queries:
+    
+    for qid, result in tqdm(first_stage_results.items(), desc="Reranking"):
+        query = result["query"]
+        first_stage_docs = result["retrieved"]
+        
+        # Get document texts
+        doc_texts = [doc['text'][:512] for doc in first_stage_docs]
+        
+        # Score with cross-encoder
+        scores = reranker.score(query, doc_texts)
+        
+        # Add scores and rerank
+        reranked_docs = []
+        for doc, score in zip(first_stage_docs, scores):
+            reranked_docs.append({
+                **doc,
+                'cross_encoder_score': float(score)
+            })
+        
+        reranked_docs.sort(key=lambda x: x['cross_encoder_score'], reverse=True)
+        
         results.append({
-            "query_id": query_item.get('id', 'unknown'),
-            "query": query_item.get('text', query_item.get('query', '')),
-            "retrieved": corpus[:top_k]
+            "qid": qid,
+            "query": query,
+            "first_stage": first_stage_docs[:top_k],
+            "reranked": reranked_docs[:top_k]
         })
+    
     return results
 
 
 def evaluate_results(
     results: List[Dict[str, Any]],
-    ground_truth: Dict[str, List[str]],
-    output_path: str = None
+    qrels: Dict[str, Dict[str, int]],
+    top_k: int = 10
 ) -> Dict[str, float]:
-    """Evaluate reranking results and save detailed output."""
-    ndcg_scores = []
-    map_scores = []
-    mrr_scores = []
-    
-    detailed_results = []
+    """Evaluate reranking results."""
+    ndcg_scores_before = []
+    ndcg_scores_after = []
+    map_scores_before = []
+    map_scores_after = []
     
     for result in results:
-        query_id = result.get('query_id', '')
-        reranked = result.get('reranked', result.get('retrieved', []))
+        qid = result["qid"]
+        relevant_docs = qrels.get(qid, {})
         
-        relevant_ids = set(ground_truth.get(query_id, []))
-        retrieved_ids = [doc['id'] for doc in reranked]
-        
-        # Save detailed per-query results
-        for rank, doc in enumerate(reranked, 1):
-            doc_id = doc.get('id', '')
-            score = doc.get('cross_encoder_score', 0)
-            is_relevant = doc_id in relevant_ids if relevant_ids else False
-            
-            detailed_results.append({
-                'query_id': query_id,
-                'query': result.get('query', ''),
-                'predicted_doc_id': doc_id,
-                'predicted_rank': rank,
-                'cross_encoder_score': score,
-                'ground_truth_doc_ids': ';'.join(relevant_ids) if relevant_ids else '',
-                'is_relevant': is_relevant
-            })
-        
-        if not relevant_ids:
+        if not relevant_docs:
             continue
         
-        # NDCG
-        dcg = sum(1.0 / np.log2(i + 2) for i, doc_id in enumerate(retrieved_ids[:10]) if doc_id in relevant_ids)
-        idcg = sum(1.0 / np.log2(i + 2) for i in range(min(len(relevant_ids), 10)))
-        ndcg = dcg / idcg if idcg > 0 else 0.0
-        ndcg_scores.append(ndcg)
+        relevant_ids = set(relevant_docs.keys())
         
-        # MAP
-        prec_sum = sum(sum(1 for doc_id in retrieved_ids[:i+1] if doc_id in relevant_ids) / (i+1) 
-                      for i in range(min(10, len(retrieved_ids))) 
-                      if any(doc_id in relevant_ids for doc_id in retrieved_ids[:i+1]))
-        map_scores.append(prec_sum / len(relevant_ids) if relevant_ids else 0)
+        # Before reranking
+        before_docs = result.get("first_stage", [])[:top_k]
+        before_ids = [doc['id'] for doc in before_docs]
         
-        # MRR
-        for i, doc_id in enumerate(retrieved_ids[:10]):
-            if doc_id in relevant_ids:
-                mrr_scores.append(1.0 / (i + 1))
-                break
-        else:
-            mrr_scores.append(0)
-    
-    # Save detailed results to CSV
-    if output_path and detailed_results:
-        csv_path = str(output_path).replace('.json', '_detailed.csv')
-        with open(csv_path, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=[
-                'query_id', 'query', 'predicted_doc_id', 'predicted_rank',
-                'cross_encoder_score', 'ground_truth_doc_ids', 'is_relevant'
-            ])
-            writer.writeheader()
-            writer.writerows(detailed_results)
-        logger.info(f"Detailed results saved to {csv_path}")
+        # NDCG before
+        dcg = sum(1.0 / np.log2(i + 2) for i, doc_id in enumerate(before_ids) if doc_id in relevant_ids)
+        idcg = sum(1.0 / np.log2(i + 2) for i in range(min(len(relevant_ids), top_k)))
+        ndcg_before = dcg / idcg if idcg > 0 else 0.0
+        ndcg_scores_before.append(ndcg_before)
+        
+        # MAP before
+        prec_sum = sum(
+            sum(1 for doc_id in before_ids[:i+1] if doc_id in relevant_ids) / (i+1)
+            for i in range(min(10, len(before_ids)))
+            if any(doc_id in relevant_ids for doc_id in before_ids[:i+1])
+        )
+        map_before = prec_sum / len(relevant_ids) if relevant_ids else 0
+        map_scores_before.append(map_before)
+        
+        # After reranking
+        after_docs = result.get("reranked", [])[:top_k]
+        after_ids = [doc['id'] for doc in after_docs]
+        
+        # NDCG after
+        dcg = sum(1.0 / np.log2(i + 2) for i, doc_id in enumerate(after_ids) if doc_id in relevant_ids)
+        ndcg_after = dcg / idcg if idcg > 0 else 0.0
+        ndcg_scores_after.append(ndcg_after)
+        
+        # MAP after
+        prec_sum = sum(
+            sum(1 for doc_id in after_ids[:i+1] if doc_id in relevant_ids) / (i+1)
+            for i in range(min(10, len(after_ids)))
+            if any(doc_id in relevant_ids for doc_id in after_ids[:i+1])
+        )
+        map_after = prec_sum / len(relevant_ids) if relevant_ids else 0
+        map_scores_after.append(map_after)
     
     return {
-        "ndcg@10": float(np.mean(ndcg_scores)) if ndcg_scores else 0.0,
-        "map@10": float(np.mean(map_scores)) if map_scores else 0.0,
-        "mrr": float(np.mean(mrr_scores)) if mrr_scores else 0.0,
+        "ndcg_before": float(np.mean(ndcg_scores_before)) if ndcg_scores_before else 0.0,
+        "ndcg_after": float(np.mean(ndcg_scores_after)) if ndcg_scores_after else 0.0,
+        "map_before": float(np.mean(map_scores_before)) if map_scores_before else 0.0,
+        "map_after": float(np.mean(map_scores_after)) if map_scores_after else 0.0,
         "num_queries": len(results)
     }
+
+
+def save_detailed_results(results: List[Dict], output_path: Path, queries_english: Dict[str, str]):
+    """Save detailed before-after results to CSV."""
+    rows = []
+    
+    for result in results:
+        qid = result["qid"]
+        query = result["query"]
+        query_en = queries_english.get(qid, "")
+        
+        # First stage (before reranking)
+        for rank, doc in enumerate(result.get("first_stage", [])[:10], 1):
+            rows.append({
+                "qid": qid,
+                "query_en": query_en,
+                "query_id": query,
+                "stage": "before_rerank",
+                "rank": rank,
+                "doc_id": doc.get("id", ""),
+                "score_before": doc.get("score", 0),
+                "score_after": doc.get("cross_encoder_score", 0) if "cross_encoder_score" in doc else 0
+            })
+        
+        # After reranking
+        for rank, doc in enumerate(result.get("reranked", [])[:10], 1):
+            rows.append({
+                "qid": qid,
+                "query_en": query_en,
+                "query_id": query,
+                "stage": "after_rerank",
+                "rank": rank,
+                "doc_id": doc.get("id", ""),
+                "score_before": doc.get("score", 0),
+                "score_after": doc.get("cross_encoder_score", 0)
+            })
+    
+    df = pd.DataFrame(rows)
+    df.to_csv(output_path, index=False)
+    logger.info(f"Detailed results saved to {output_path}")
 
 
 def main():
     parser = argparse.ArgumentParser(description="Run CE reranking experiments")
     parser.add_argument("--method", type=str, default="mmmini")
     parser.add_argument("--model-type", type=str, default="mmmini")
-    parser.add_argument("--dataset", type=str, default="cosqa")
-    parser.add_argument("--split", type=str, default="test")
-    parser.add_argument("--sample-size", type=int, default=10)
-    parser.add_argument("--top-k", type=int, default=5)
+    parser.add_argument("--top-k", type=int, default=10)
+    parser.add_argument("--first-stage-k", type=int, default=100)
     parser.add_argument("--device", type=str, default="cpu")
-    parser.add_argument("--output", type=str, default="./reranker/reranker_results.json")
+    parser.add_argument("--output", type=str, default="./reranker/reranker_benchmark_results.json")
+    parser.add_argument("--sample-size", type=int, default=None, help="Limit number of queries (for testing)")
     
     args = parser.parse_args()
     
-    logger.info(f"=== Benchmark: {args.dataset} ===")
+    logger.info("Loading COSQA data with Indonesian translations...")
+    corpus, queries_en, queries_id, qrels = load_cosqa_with_translations()
     
-    queries, corpus, relevance_labels = load_benchmark_data(
-        dataset_name=args.dataset,
-        sample_size=args.sample_size
-    )
-    logger.info(f"Loaded {len(queries)} queries, {len(corpus)} docs")
+    # Optionally limit queries
+    if args.sample_size:
+        queries_en = dict(list(queries_en.items())[:args.sample_size])
+        queries_id = dict(list(queries_id.items())[:args.sample_size])
+        qrels = {k: v for k, v in qrels.items() if k in queries_en}
     
-    if not queries or not corpus:
-        logger.error("Failed to load data!")
-        return
+    logger.info(f"Loaded {len(queries_en)} queries, {len(corpus)} docs")
     
-    if args.method == "baseline":
-        results = run_baseline(queries, corpus, args.top_k)
+    # Initialize reranker
+    if args.method == "mmmini":
+        reranker = MMMiniReranker(device=args.device)
+    elif args.method == "mmmini_multilingual":
+        reranker = MultilingualMMMiniReranker(device=args.device)
+    elif args.method == "xlm":
+        reranker = XLMReranker(device=args.device)
     else:
-        results = run_cross_encoder_reranking(queries, corpus, args.model_type, args.top_k, args.device)
+        reranker = MMMiniReranker(device=args.device)
     
-    metrics = evaluate_results(results, relevance_labels, args.output) if relevance_labels else {}
+    reranker.load_model()
     
-    logger.info(f"=== Metrics: {metrics}")
+    all_results = {}
+    all_metrics = {}
     
+    # Run for English queries
+    logger.info("=" * 60)
+    logger.info("Running English queries benchmark...")
+    logger.info("=" * 60)
+    
+    first_stage_en = run_first_stage_retrieval(queries_en, corpus, args.first_stage_k)
+    results_en = run_reranking(first_stage_en, reranker, args.top_k)
+    metrics_en = evaluate_results(results_en, qrels, args.top_k)
+    
+    logger.info(f"English - NDCG@10 Before: {metrics_en['ndcg_before']:.4f}, After: {metrics_en['ndcg_after']:.4f}")
+    
+    all_results["english"] = results_en
+    all_metrics["english"] = metrics_en
+    
+    # Run for Indonesian queries
+    logger.info("=" * 60)
+    logger.info("Running Indonesian queries benchmark...")
+    logger.info("=" * 60)
+    
+    first_stage_id = run_first_stage_retrieval(queries_id, corpus, args.first_stage_k)
+    results_id = run_reranking(first_stage_id, reranker, args.top_k)
+    metrics_id = evaluate_results(results_id, qrels, args.top_k)
+    
+    logger.info(f"Indonesian - NDCG@10 Before: {metrics_id['ndcg_before']:.4f}, After: {metrics_id['ndcg_after']:.4f}")
+    
+    all_results["indonesian"] = results_id
+    all_metrics["indonesian"] = metrics_id
+    
+    # Save results
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
-    with open(output_path, "w") as f:
-        json.dump({
-            "dataset": args.dataset,
-            "method": args.method,
-            "metrics": metrics,
-            "results": results
-        }, f, indent=2)
+    output_data = {
+        "method": args.method,
+        "top_k": args.top_k,
+        "first_stage_k": args.first_stage_k,
+        "metrics": {
+            "english": all_metrics["english"],
+            "indonesian": all_metrics["indonesian"]
+        },
+        "results": all_results
+    }
     
-    print(f"\n=== Results ===")
-    print(f"Dataset: {args.dataset}")
-    print(f"Queries: {len(queries)}, Docs: {len(corpus)}")
-    if metrics:
-        print(f"nDCG@10: {metrics.get('ndcg@10', 0):.4f}")
-        print(f"MAP@10: {metrics.get('map@10', 0):.4f}")
-        print(f"MRR: {metrics.get('mrr', 0):.4f}")
+    with open(output_path, "w") as f:
+        json.dump(output_data, f, indent=2)
+    
+    # Save CSV detailed results
+    csv_path = output_path.with_name(f"reranker_{args.method}_benchmark.csv")
+    save_detailed_results(results_en + results_id, csv_path, queries_en)
+    
+    # Print summary
+    print("\n" + "=" * 60)
+    print("RERANKER BENCHMARK RESULTS")
+    print("=" * 60)
+    print(f"\nMethod: {args.method}")
+    print(f"First-stage: mE5 (top-{args.first_stage_k})")
+    print(f"Reranker: {args.method}")
+    print(f"Top-K: {args.top_k}")
+    
+    print("\n--- English Queries ---")
+    print(f"NDCG@{args.top_k} Before: {all_metrics['english']['ndcg_before']:.4f}")
+    print(f"NDCG@{args.top_k} After:  {all_metrics['english']['ndcg_after']:.4f}")
+    print(f"MAP@{args.top_k} Before: {all_metrics['english']['map_before']:.4f}")
+    print(f"MAP@{args.top_k} After:  {all_metrics['english']['map_after']:.4f}")
+    
+    print("\n--- Indonesian Queries ---")
+    print(f"NDCG@{args.top_k} Before: {all_metrics['indonesian']['ndcg_before']:.4f}")
+    print(f"NDCG@{args.top_k} After:  {all_metrics['indonesian']['ndcg_after']:.4f}")
+    print(f"MAP@{args.top_k} Before: {all_metrics['indonesian']['map_before']:.4f}")
+    print(f"MAP@{args.top_k} After:  {all_metrics['indonesian']['map_after']:.4f}")
+    
+    # Calculate improvement
+    ndcg_improvement_en = all_metrics['english']['ndcg_after'] - all_metrics['english']['ndcg_before']
+    ndcg_improvement_id = all_metrics['indonesian']['ndcg_after'] - all_metrics['indonesian']['ndcg_before']
+    
+    print("\n--- Improvement (After - Before) ---")
+    print(f"English NDCG: {ndcg_improvement_en:+.4f}")
+    print(f"Indonesian NDCG: {ndcg_improvement_id:+.4f}")
+    print("=" * 60)
+    
+    logger.info(f"Results saved to {output_path}")
 
 
 if __name__ == "__main__":

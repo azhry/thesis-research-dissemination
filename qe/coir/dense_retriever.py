@@ -3,6 +3,8 @@ Dense Retriever using Multilingual E5 (mE5) embeddings.
 """
 
 import logging
+import os
+from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 import numpy as np
 import torch
@@ -91,6 +93,7 @@ class DenseRetriever:
         self,
         corpus: List[Dict[str, str]],
         show_progress: bool = True,
+        cache_dir: str = None,
     ) -> Tuple[np.ndarray, List[str]]:
         """
         Encode corpus documents into embeddings.
@@ -98,10 +101,28 @@ class DenseRetriever:
         Args:
             corpus: List of documents with "id" and "text" fields
             show_progress: Show progress bar
+            cache_dir: Optional directory to cache embeddings
             
         Returns:
             Tuple of (embeddings, ids)
         """
+        # Check for cached embeddings
+        if cache_dir is None:
+            cache_dir = "./cache"
+        
+        # Create cache filename based on model name and corpus size
+        model_short = self.model_name.replace("/", "_")
+        cache_file = os.path.join(cache_dir, f"corpus_{model_short}_{len(corpus)}.npy")
+        ids_file = os.path.join(cache_dir, f"corpus_ids_{model_short}_{len(corpus)}.npy")
+        
+        # Try to load from cache
+        if os.path.exists(cache_file) and os.path.exists(ids_file):
+            logger.info(f"Loading cached embeddings from {cache_file}")
+            embeddings = np.load(cache_file)
+            doc_ids = np.load(ids_file, allow_pickle=True).tolist()
+            self.corpus_embeddings = embeddings
+            self.corpus_ids = doc_ids
+            return embeddings, doc_ids
         # Extract text and IDs
         # Handle different corpus formats: dict, list of dicts, or list of strings
         if isinstance(corpus, dict):
@@ -129,6 +150,12 @@ class DenseRetriever:
             device=self.device,
             normalize_embeddings=self.normalize_embeddings,
         )
+        
+        # Save to cache
+        os.makedirs(cache_dir, exist_ok=True)
+        np.save(cache_file, embeddings)
+        np.save(ids_file, np.array(doc_ids, dtype=object))
+        logger.info(f"Saved embeddings to cache: {cache_file}")
         
         # Cache embeddings
         self.corpus_embeddings = embeddings

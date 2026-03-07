@@ -10,7 +10,10 @@ import logging
 from typing import List, Dict, Any, Optional
 import torch
 
-from .cross_encoder_base import CrossEncoderReranker
+try:
+    from .cross_encoder_base import CrossEncoderReranker
+except ImportError:
+    from cross_encoder_base import CrossEncoderReranker
 
 logger = logging.getLogger(__name__)
 
