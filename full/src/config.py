@@ -26,6 +26,7 @@ class RerankerModel(Enum):
     MMMINI_MULTILINGUAL = "mmmini_multilingual"
     XLM_ROBERTA = "xlm"
     MBERT = "mbert"
+    CUSTOM = "custom"
 
 
 class QEMethod(Enum):
@@ -43,7 +44,7 @@ class PipelineConfig:
     
     # === Project paths ===
     project_root: Path = field(default_factory=lambda: Path(__file__).parent.parent)
-    output_dir: str = "./results"
+    output_dir: str = "results"  # Will be resolved relative to project_root in __post_init__
     
     # === Experiment type ===
     experiment_type: ExperimentType = ExperimentType.FULL
@@ -59,11 +60,11 @@ class PipelineConfig:
     
     # === Query Expansion (TQE) ===
     enable_tqe: bool = True
-    qe_method: QEMethod = QEMethod.TRANSLATION
+    qe_method: QEMethod = QEMethod.HYDE
     qe_num_terms: int = 5
     # LLM settings (for HyDE/technical/CoT methods)
-    llm_provider: str = "openai"
-    llm_model: str = "gpt-4o"
+    llm_provider: str = "google"
+    llm_model: str = "models/gemini-flash-latest"
     llm_temperature: float = 0.7
     llm_max_tokens: int = 512
     
@@ -99,6 +100,10 @@ class PipelineConfig:
         elif self.experiment_type == ExperimentType.FULL:
             self.enable_tqe = True
             self.enable_reranker = True
+            
+        # Ensure output_dir is absolute relative to project_root
+        if not Path(self.output_dir).is_absolute():
+            self.output_dir = str(self.project_root / self.output_dir)
         
         # Set default reranker model name
         if self.reranker_model_name is None:
@@ -133,6 +138,7 @@ RERANKER_MODEL_MAP = {
     RerankerModel.MMMINI_MULTILINGUAL: "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
     RerankerModel.XLM_ROBERTA: "cross-encoder/stsb-roberta-base",
     RerankerModel.MBERT: "cross-encoder/ms-marco-MiniLM-L-12-v2",
+    RerankerModel.CUSTOM: "./full/models/cross-encoder-me5-small-full",
 }
 
 RETRIEVER_MODEL_MAP = {
@@ -189,5 +195,11 @@ EXPERIMENT_PRESETS: Dict[str, Dict[str, Any]] = {
         "qe_method": QEMethod.HYDE,
         "reranker_model_type": RerankerModel.MMMINI,
         "description": "Full pipeline: mE5 + HyDE TQE + mMiniLMv2",
+    },
+    "full_hyde_custom": {
+        "experiment_type": ExperimentType.FULL,
+        "qe_method": QEMethod.HYDE,
+        "reranker_model_type": RerankerModel.CUSTOM,
+        "description": "Full pipeline: mE5 + HyDE TQE + Fine-tuned mE5 Cross-Encoder",
     },
 }

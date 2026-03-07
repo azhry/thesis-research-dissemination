@@ -181,14 +181,15 @@ class QueryExpander:
     
     def __init__(
         self,
-        method: str = "translation",
+        method: str = "hyde",
         num_terms: int = 5,
         embedding_model: str = "intfloat/multilingual-e5-small",
-        llm_provider: str = "openai",
-        llm_model: str = "gpt-4o",
+        llm_provider: str = "google",
+        llm_model: str = "models/gemini-flash-latest",
         llm_temperature: float = 0.7,
         llm_max_tokens: int = 512,
         device: str = "cpu",
+        cache_path: Optional[str] = None,
     ):
         """
         Initialize the query expander.
@@ -202,6 +203,7 @@ class QueryExpander:
             llm_temperature: LLM temperature
             llm_max_tokens: LLM max tokens
             device: Device for embedding model
+            cache_path: Path to LLM result cache
         """
         self.method = method
         self.num_terms = num_terms
@@ -217,7 +219,7 @@ class QueryExpander:
             self._init_embedding_expander(embedding_model)
         elif method in ("hyde", "technical", "cot"):
             _setup_coir_path()
-            self._init_llm_expander(llm_provider, llm_model, llm_temperature, llm_max_tokens)
+            self._init_llm_expander(llm_provider, llm_model, llm_temperature, llm_max_tokens, cache_path)
         else:
             raise ValueError(f"Unknown QE method: {method}")
     
@@ -231,7 +233,7 @@ class QueryExpander:
             device=self.device,
         )
     
-    def _init_llm_expander(self, provider: str, model: str, temperature: float, max_tokens: int):
+    def _init_llm_expander(self, provider: str, model: str, temperature: float, max_tokens: int, cache_path: Optional[str] = None):
         """Initialize LLM-based expander."""
         from coir.llm_expander import LLMExpander
         
@@ -241,6 +243,7 @@ class QueryExpander:
             model=model,
             temperature=temperature,
             max_tokens=max_tokens,
+            cache_path=cache_path,
         )
     
     def expand(self, query: str) -> QEResult:

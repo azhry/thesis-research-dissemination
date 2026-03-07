@@ -114,7 +114,13 @@ class Reranker:
         Returns:
             Array of relevance scores
         """
-        pairs = [[query, doc] for doc in documents]
+        # Add prefixes for mE5 compatibility if it's our custom model
+        # or it's an E5-based model
+        q_prefix = "query: "
+        d_prefix = "passage: "
+        
+        pairs = [[q_prefix + query, d_prefix + doc] for doc in documents]
+        
         scores = self._model.predict(
             pairs,
             batch_size=self.batch_size,

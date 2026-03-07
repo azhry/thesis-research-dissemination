@@ -6,3 +6,33 @@ qe/coir/__pycache__
 latex
 agent_shame.md
 cache
+
+# Large LLM Model Binaries and Trained Weights
+full/models/
+reranker/models/
+test_save_model/
+checkpoints/
+**/checkpoints/
+*.safetensors
+*.bin
+*.pt
+
+# Local Results and Result Cache
+full/results/*.json
+full/results/*.csv
+full/results/*.png
+!full/results/.gitkeep
+full/results/llm_expansion_cache.json
+test_cache.json
+
+# Local Diagnostic Files, Logs, and Test Scripts
+full/diagnostic/
+*.log
+training_log*.txt
+gemini_test_out*.txt
+hyde_test_output*.txt
+test_expander_quality.py
+hyde_results_v2.json
+Detailed_results.csv
+qualitative_reranking*.json
+full_experiment_results.json

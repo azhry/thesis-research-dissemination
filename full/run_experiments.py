@@ -57,6 +57,8 @@ def run_single_experiment(
         first_stage_top_k=args.first_stage_k,
         qe_method=QEMethod(args.qe_method),
         qe_num_terms=args.qe_num_terms,
+        llm_provider=args.llm_provider,
+        llm_model=args.llm_model,
         reranker_model_type=RerankerModel(args.reranker_model),
         reranker_top_k=args.top_k,
         device=args.device,
@@ -68,6 +70,63 @@ def run_single_experiment(
     results = pipeline.run_bilingual(queries_en, queries_id, corpus, qrels)
     
     return results
+
+
+def save_qualitative_reranking(
+    all_results: Dict[str, Dict[str, Any]],
+    output_dir: Path,
+    num_queries: int = 20,
+    top_k: int = 10,
+):
+    """Save qualitative examples showing before/after reranking side-by-side."""
+    for exp_name, exp_results in all_results.items():
+        if "rerank" not in exp_name and "full" not in exp_name:
+            continue
+            
+        examples = {}
+        for lang in ["english", "indonesian"]:
+            if lang not in exp_results:
+                continue
+                
+            raw = exp_results[lang].get("raw_results", {})
+            examples[lang] = {}
+            
+            # Take a sample of queries
+            for qid, data in list(raw.items())[:num_queries]:
+                query = data.get("query", "")
+                
+                before_docs = data.get("first_stage", [])[:top_k]
+                after_docs = data.get("reranked", [])[:top_k]
+                
+                examples[lang][qid] = {
+                    "original_query": data.get("original_query", query),
+                    "expanded_query": data.get("expanded_query", query),
+                    f"before_reranking_top{top_k}": [
+                        {
+                            "rank": i+1, 
+                            "id": d.get("id"), 
+                            "score": round(d.get("score", 0), 4),
+                            # Truncate text for readability
+                            "text": d.get("text", "")[:150].replace("\n", " ") + "..."
+                        } 
+                        for i, d in enumerate(before_docs)
+                    ],
+                    f"after_reranking_top{top_k}": [
+                        {
+                            "rank": i+1, 
+                            "id": d.get("id"), 
+                            "ce_score": round(d.get("cross_encoder_score", 0), 4),
+                            "text": d.get("text", "")[:150].replace("\n", " ") + "..."
+                        }
+                        for i, d in enumerate(after_docs)
+                    ]
+                }
+                
+        if examples:
+            out_path = output_dir / f"qualitative_reranking_{exp_name}.json"
+            with open(out_path, "w") as f:
+                json.dump(examples, f, indent=2, ensure_ascii=False)
+            logger.info(f"Qualitative before/after reranking examples saved to {out_path}")
 
 
 def save_detailed_csv(
@@ -91,37 +150,60 @@ def save_detailed_csv(
                 original_query = data.get("original_query", query)
                 expanded_query = data.get("expanded_query", query)
                 
-                # Get the final ranked list
-                if "reranked" in data:
-                    docs = data["reranked"][:10]
-                    stage = "reranked"
+                # Check what stages are available
+                if "first_stage" in data and "reranked" in data:
+                    # This is a reranking experiment, add BEFORE
+                    for rank, doc in enumerate(data["first_stage"][:10], 1):
+                        rows.append({
+                            "experiment": exp_name,
+                            "language": lang,
+                            "qid": qid,
+                            "query_en": queries_en.get(qid, ""),
+                            "query_used": query,
+                            "expanded_query": expanded_query if expanded_query != query else "",
+                            "stage": "before_reranking",
+                            "rank": rank,
+                            "doc_id": doc.get("id", ""),
+                            "retrieval_score": doc.get("score", 0),
+                            "cross_encoder_score": "",
+                        })
+                    # Add AFTER
+                    for rank, doc in enumerate(data["reranked"][:10], 1):
+                        rows.append({
+                            "experiment": exp_name,
+                            "language": lang,
+                            "qid": qid,
+                            "query_en": queries_en.get(qid, ""),
+                            "query_used": query,
+                            "expanded_query": expanded_query if expanded_query != query else "",
+                            "stage": "after_reranking",
+                            "rank": rank,
+                            "doc_id": doc.get("id", ""),
+                            "retrieval_score": doc.get("score", 0),  # carry over original score
+                            "cross_encoder_score": doc.get("cross_encoder_score", ""),
+                        })
                 elif "retrieved" in data:
-                    docs = data["retrieved"][:10]
-                    stage = "retrieval_only"
-                else:
-                    continue
-                
-                for rank, doc in enumerate(docs, 1):
-                    rows.append({
-                        "experiment": exp_name,
-                        "language": lang,
-                        "qid": qid,
-                        "query_en": queries_en.get(qid, ""),
-                        "query_used": query,
-                        "expanded_query": expanded_query if expanded_query != query else "",
-                        "stage": stage,
-                        "rank": rank,
-                        "doc_id": doc.get("id", ""),
-                        "retrieval_score": doc.get("score", 0),
-                        "cross_encoder_score": doc.get("cross_encoder_score", ""),
-                    })
+                    # Baseline or TQE only
+                    for rank, doc in enumerate(data["retrieved"][:10], 1):
+                        rows.append({
+                            "experiment": exp_name,
+                            "language": lang,
+                            "qid": qid,
+                            "query_en": queries_en.get(qid, ""),
+                            "query_used": query,
+                            "expanded_query": expanded_query if expanded_query != query else "",
+                            "stage": "retrieval_only",
+                            "rank": rank,
+                            "doc_id": doc.get("id", ""),
+                            "retrieval_score": doc.get("score", 0),
+                            "cross_encoder_score": "",
+                        })
     
     if rows:
         df = pd.DataFrame(rows)
         csv_path = output_dir / "detailed_results.csv"
         df.to_csv(csv_path, index=False)
-        logger.info(f"Detailed results saved to {csv_path}")
-
+        logger.info(f"Detailed CSV results saved to {csv_path}")
 
 def print_summary(all_results: Dict[str, Dict[str, Any]]):
     """Print a comparison table of all experiments."""
@@ -258,13 +340,17 @@ def main():
     parser.add_argument("--first-stage-k", type=int, default=100)
     
     # QE settings
-    parser.add_argument("--qe-method", type=str, default="translation",
+    parser.add_argument("--qe-method", type=str, default="hyde",
                         choices=["translation", "embedding", "hyde", "technical", "cot"])
     parser.add_argument("--qe-num-terms", type=int, default=5)
     
+    # LLM settings
+    parser.add_argument("--llm-provider", type=str, default="google", choices=["google", "openai", "local"])
+    parser.add_argument("--llm-model", type=str, default="models/gemini-flash-latest")
+    
     # Reranker settings
     parser.add_argument("--reranker-model", type=str, default="mmmini",
-                        choices=["mmmini", "mmmini_multilingual", "xlm", "mbert"])
+                        choices=["mmmini", "mmmini_multilingual", "xlm", "mbert", "custom"])
     parser.add_argument("--top-k", type=int, default=10)
     
     # General settings
@@ -327,6 +413,9 @@ def main():
         json.dump(serializable, f, indent=2, ensure_ascii=False, default=str)
     
     logger.info(f"Results saved to {output_path}")
+    
+    # Save qualitative examples before/after reranking side-by-side
+    save_qualitative_reranking(all_results, output_path.parent, top_k=args.top_k)
     
     # Save detailed CSV
     save_detailed_csv(all_results, output_path.parent, queries_en)

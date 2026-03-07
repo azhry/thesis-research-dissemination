@@ -77,6 +77,7 @@ class Pipeline:
                 llm_temperature=self.config.llm_temperature,
                 llm_max_tokens=self.config.llm_max_tokens,
                 device=self.config.device,
+                cache_path=str(self.config.project_root / "results" / "llm_expansion_cache.json")
             )
         return self._expander
     

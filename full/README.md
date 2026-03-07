@@ -83,6 +83,28 @@ python full/experiments/full_pipeline_eval.py --sample-size 10
 python full/experiments/compare_results.py --results-dir ./full/results
 ```
 
+## Fine-tuning the Cross-Encoder
+
+To fine-tune the multilingual E5 model as a cross-encoder on the CoSQA dataset:
+
+```bash
+python full/finetune_cross_encoder.py \
+    --model-name intfloat/multilingual-e5-small \
+    --output-dir ./full/models/cross-encoder-me5-small \
+    --num-epochs 3 \
+    --batch-size 16
+```
+
+Use the fine-tuned model in experiments:
+
+```bash
+python full/run_experiments.py \
+    --experiments full \
+    --qe-method hyde \
+    --reranker-model custom \
+    --sample-size 10
+```
+
 ## CLI Arguments
 
 | Argument | Default | Description |
@@ -90,9 +112,9 @@ python full/experiments/compare_results.py --results-dir ./full/results
 | `--experiments` | all 4 | Which experiments to run |
 | `--retriever-model` | `intfloat/multilingual-e5-small` | mE5 model variant |
 | `--first-stage-k` | 100 | Number of candidates for reranking |
-| `--qe-method` | `embedding` | QE method: embedding, hyde, technical, cot |
+| `--qe-method` | `hyde` | QE method: embedding, hyde, technical, cot, translation |
 | `--qe-num-terms` | 5 | Number of expansion terms |
-| `--reranker-model` | `mmmini` | Reranker: mmmini, xlm, mbert |
+| `--reranker-model` | `mmmini` | Reranker: mmmini, mmmini_multilingual, xlm, mbert, custom |
 | `--top-k` | 10 | Final top-K results |
 | `--device` | `cpu` | Device: cpu or cuda |
 | `--sample-size` | None | Limit queries for testing |
@@ -112,3 +134,4 @@ Computed at K = {1, 5, 10, 20, 50, 100}
 This pipeline reuses modules from:
 - `qe/coir/` — Data loading, dense retrieval, query expansion
 - `reranker/` — Cross-encoder implementations (MMMini, XLM, mBERT)
+- `sentence-transformers`, `datasets`, `google-generativeai` (for HyDE)
