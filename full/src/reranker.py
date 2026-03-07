@@ -114,12 +114,18 @@ class Reranker:
         Returns:
             Array of relevance scores
         """
-        # Add prefixes for mE5 compatibility if it's our custom model
-        # or it's an E5-based model
-        q_prefix = "query: "
-        d_prefix = "passage: "
+        # Add prefixes ONLY if it's an E5-based model (like our custom one)
+        # MS MARCO models (MiniLM) were NOT trained with these prefixes.
+        is_e5 = ("e5" in self.model_name.lower()) or (self.model_type == "custom")
         
-        pairs = [[q_prefix + query, d_prefix + doc] for doc in documents]
+        if is_e5:
+            q_prefix = "query: "
+            d_prefix = "passage: "
+            pairs = [[q_prefix + query, d_prefix + doc] for doc in documents]
+            # logger.debug(f"Using E5 prefixes for reranking with {self.model_name}")
+        else:
+            pairs = [[query, doc] for doc in documents]
+            # logger.debug(f"No prefixes used for reranking with {self.model_name}")
         
         scores = self._model.predict(
             pairs,
