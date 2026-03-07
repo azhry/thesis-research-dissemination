@@ -282,10 +282,49 @@ Provide your response in JSON format:
             
         # Update cache
         if response:
+            # Post-process to remove conversational fluff
+            response = self._clean_response(response)
             self.cache[prompt] = response
             self._save_cache()
             
         return response
+
+    def _clean_response(self, text: str) -> str:
+        """Remove conversational lines like 'Here is the response:' from LLM output."""
+        if not text:
+            return ""
+        
+        lines = text.strip().split('\n')
+        cleaned_lines = []
+        
+        # Patterns to skip (case-insensitive prefixes)
+        skip_prefixes = [
+            "here is the response",
+            "here is a concise",
+            "here's the response",
+            "certainly",
+            "based on the query",
+            "i understand",
+            "response:",
+            "query:",
+        ]
+        
+        for line in lines:
+            line_lower = line.lower().strip()
+            
+            # Skip empty lines
+            if not line_lower:
+                continue
+                
+            # Skip conversational introductions
+            is_intro = any(line_lower.startswith(p) for p in skip_prefixes)
+            # Skip lines that are just "Response:" or similar
+            if is_intro and (len(line_lower) < 50 or "library:" not in line_lower):
+                continue
+            
+            cleaned_lines.append(line.strip())
+            
+        return "\n".join(cleaned_lines)
     
     def _generate_openai(self, prompt: str) -> str:
         """Generate using OpenAI API."""
