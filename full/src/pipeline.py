@@ -149,12 +149,43 @@ class Pipeline:
         retriever = self._get_retriever()
         
         if self.config.enable_tqe:
-            first_stage_results = retriever.retrieve_with_expanded_queries(
-                original_queries=queries,
-                expanded_queries=expanded_queries,
+            # 1. Baseline retrieval (Original Queries)
+            logger.info("  Running baseline retrieval for diagnostic comparison...")
+            results_original = retriever.retrieve(
+                queries=queries,
                 corpus=corpus,
                 top_k=self.config.first_stage_top_k,
+                show_progress=False
             )
+            
+            # 2. Expansion retrieval (Expanded Queries)
+            logger.info("  Running retrieval with expanded queries...")
+            results_expanded = retriever.retrieve(
+                queries=expanded_queries,
+                corpus=corpus,
+                top_k=self.config.first_stage_top_k,
+                show_progress=False
+            )
+            
+            # 3. Hybrid Fusion
+            logger.info("  Fusing results (Hybrid Search)...")
+            first_stage_results = retriever.fuse_results(
+                results_original=results_original,
+                results_expanded=results_expanded,
+                top_k=self.config.first_stage_top_k,
+                expansion_weight=0.3
+            )
+            
+            # Log the impact
+            baseline_eval = evaluate_retrieval(results_original, qrels, [10])
+            tqe_eval = evaluate_retrieval(first_stage_results, qrels, [10])
+            diff = tqe_eval['nDCG@10'] - baseline_eval['nDCG@10']
+            
+            logger.info(f"{'-'*40}")
+            logger.info(f"  [TQE DIAGNOSTIC] Impact on First-Stage Retrieval ({language}):")
+            logger.info(f"  Baseline nDCG@10:   {baseline_eval['nDCG@10']:.4f}")
+            logger.info(f"  TQE-Boosted nDCG@10: {tqe_eval['nDCG@10']:.4f} ({diff:+.4f})")
+            logger.info(f"{'-'*40}")
         else:
             first_stage_results = retriever.retrieve(
                 queries=queries,

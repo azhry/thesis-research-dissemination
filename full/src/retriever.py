@@ -119,33 +119,54 @@ class Retriever:
         
         return results
     
-    def retrieve_with_expanded_queries(
+    def fuse_results(
         self,
-        original_queries: Dict[str, str],
-        expanded_queries: Dict[str, str],
-        corpus: Any,
+        results_original: Dict[str, Dict[str, Any]],
+        results_expanded: Dict[str, Dict[str, Any]],
         top_k: int = 100,
-        show_progress: bool = True,
+        expansion_weight: float = 0.3
     ) -> Dict[str, Dict[str, Any]]:
         """
-        Retrieve using expanded queries but track original queries.
-        
-        Args:
-            original_queries: Dict mapping query_id -> original query text
-            expanded_queries: Dict mapping query_id -> expanded query text
-            corpus: Corpus
-            top_k: Number of top documents
-            show_progress: Show progress bar
-        
-        Returns:
-            Same format as retrieve(), but query is the expanded version
+        Merge scores from original and expanded retrieval results.
         """
-        # Use expanded queries for retrieval
-        results = self.retrieve(expanded_queries, corpus, top_k, show_progress)
-        
-        # Add original query info
-        for qid in results:
-            results[qid]["original_query"] = original_queries.get(qid, "")
-            results[qid]["expanded_query"] = expanded_queries.get(qid, "")
-        
-        return results
+        final_results = {}
+        for qid in results_original:
+            orig_data = results_original.get(qid, {"retrieved": []})
+            exp_data = results_expanded.get(qid, {"retrieved": []})
+            
+            # Map doc_id -> score
+            score_map = {}
+            doc_info = {}
+            
+            # Add original scores
+            for doc in orig_data["retrieved"]:
+                doc_id = doc["id"]
+                score_map[doc_id] = doc["score"]
+                doc_info[doc_id] = doc
+                
+            # Add expanded scores (weighted)
+            for doc in exp_data["retrieved"]:
+                doc_id = doc["id"]
+                score_map[doc_id] = score_map.get(doc_id, 0.0) + (expansion_weight * doc["score"])
+                if doc_id not in doc_info:
+                    doc_info[doc_id] = doc
+            
+            # Sort by fused score
+            fused_retrieved = []
+            for doc_id, score in score_map.items():
+                fused_retrieved.append({
+                    **doc_info[doc_id],
+                    "score": score,
+                    "retrieval_score_orig": doc_info[doc_id].get("score", 0.0),
+                    "retrieval_score_exp": score - doc_info[doc_id].get("score", 0.0)
+                })
+            
+            fused_retrieved.sort(key=lambda x: x["score"], reverse=True)
+            
+            final_results[qid] = {
+                "query": results_original[qid]["query"],
+                "original_query": results_original[qid].get("original_query", results_original[qid]["query"]),
+                "expanded_query": results_expanded[qid].get("expanded_query", results_expanded[qid]["query"]),
+                "retrieved": fused_retrieved[:top_k]
+            }
+        return final_results
