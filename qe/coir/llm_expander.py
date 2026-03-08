@@ -34,13 +34,20 @@ class LLMExpander:
     """
     
     # Default prompt templates
-    HIDE_PROMPT = """Given an Indonesian query, generate a hypothetical English document/code snippet 
-that would be relevant to this query. The hypothetical document should contain technical terms 
-and code that matches the user's intent.
+    HIDE_PROMPT = """Given a programming query, provide a concise technical summary in English.
+Respond ONLY with the following format:
+Library: <names>
+Code: <one-line example>
+Terms: <3-5 keywords>
 
-Indonesian Query: {query}
+Example Query: reverse a list in python
+Response:
+Library: list, reversed
+Code: my_list[::-1]
+Terms: slicing, indexing, reverse-order, sequence
 
-Generate a hypothetical English document (1-2 sentences):"""
+Query: {query}
+Response:"""
 
     TECHNICAL_ENRICHMENT_PROMPT = """Given an Indonesian query related to programming/code, 
 expand it with relevant English technical terms, library names, and API concepts.
@@ -79,6 +86,7 @@ Provide your response in JSON format:
         temperature: float = 0.7,
         max_tokens: int = 512,
         api_key: Optional[str] = None,
+        cache_path: Optional[str] = None,
     ):
         """
         Initialize the LLM expander.
@@ -89,6 +97,7 @@ Provide your response in JSON format:
             temperature: Generation temperature
             max_tokens: Maximum tokens to generate
             api_key: API key (will use env var if not provided)
+            cache_path: Path to JSON cache file
         """
         self.provider = provider
         self.model = model
@@ -96,8 +105,32 @@ Provide your response in JSON format:
         self.max_tokens = max_tokens
         self.api_key = api_key or os.getenv("OPENAI_API_KEY") or os.getenv("GEMINI_API_KEY")
         
+        # Caching
+        self.cache_path = cache_path or "./full/results/llm_expansion_cache.json"
+        self.cache = {}
+        self._load_cache()
+
         self._client = None
         self._initialize_client()
+    
+    def _load_cache(self):
+        """Load cache from disk."""
+        if os.path.exists(self.cache_path):
+            try:
+                with open(self.cache_path, 'r', encoding='utf-8') as f:
+                    self.cache = json.load(f)
+                logger.info(f"Loaded {len(self.cache)} entries from cache: {self.cache_path}")
+            except Exception as e:
+                logger.warning(f"Failed to load cache: {e}")
+
+    def _save_cache(self):
+        """Save cache to disk."""
+        try:
+            os.makedirs(os.path.dirname(self.cache_path), exist_ok=True)
+            with open(self.cache_path, 'w', encoding='utf-8') as f:
+                json.dump(self.cache, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            logger.warning(f"Failed to save cache: {e}")
     
     def _initialize_client(self):
         """Initialize the LLM client."""
@@ -117,6 +150,14 @@ Provide your response in JSON format:
                 logger.info(f"Initialized Google Gemini client with model: {self.model}")
             except ImportError:
                 logger.warning("Google GenerativeAI not available. Install with: pip install google-generativeai")
+                
+        elif self.provider == "local":
+            try:
+                import requests
+                self._client = requests
+                logger.info(f"Initialized local client (Ollama) with model: {self.model}")
+            except ImportError:
+                logger.warning("Requests not available. Install with: pip install requests")
     
     def expand(
         self,
@@ -225,13 +266,65 @@ Provide your response in JSON format:
         )
     
     def _generate(self, prompt: str) -> str:
-        """Generate text using LLM."""
+        """Generate text using LLM, with caching."""
+        # Use prompt as cache key
+        if prompt in self.cache:
+            return self.cache[prompt]
+            
         if self.provider == "openai":
-            return self._generate_openai(prompt)
+            response = self._generate_openai(prompt)
         elif self.provider == "google":
-            return self._generate_google(prompt)
+            response = self._generate_google(prompt)
+        elif self.provider == "local":
+            response = self._generate_local(prompt)
         else:
             raise ValueError(f"Unknown provider: {self.provider}")
+            
+        # Update cache
+        if response:
+            # Post-process to remove conversational fluff
+            response = self._clean_response(response)
+            self.cache[prompt] = response
+            self._save_cache()
+            
+        return response
+
+    def _clean_response(self, text: str) -> str:
+        """Remove conversational lines like 'Here is the response:' from LLM output."""
+        if not text:
+            return ""
+        
+        lines = text.strip().split('\n')
+        cleaned_lines = []
+        
+        # Patterns to skip (case-insensitive prefixes)
+        skip_prefixes = [
+            "here is the response",
+            "here is a concise",
+            "here's the response",
+            "certainly",
+            "based on the query",
+            "i understand",
+            "response:",
+            "query:",
+        ]
+        
+        for line in lines:
+            line_lower = line.lower().strip()
+            
+            # Skip empty lines
+            if not line_lower:
+                continue
+                
+            # Skip conversational introductions
+            is_intro = any(line_lower.startswith(p) for p in skip_prefixes)
+            # Skip lines that are just "Response:" or similar
+            if is_intro and (len(line_lower) < 50 or "library:" not in line_lower):
+                continue
+            
+            cleaned_lines.append(line.strip())
+            
+        return "\n".join(cleaned_lines)
     
     def _generate_openai(self, prompt: str) -> str:
         """Generate using OpenAI API."""
@@ -267,6 +360,31 @@ Provide your response in JSON format:
             return response.text
         except Exception as e:
             logger.error(f"Google generation failed: {e}")
+            return ""
+
+    def _generate_local(self, prompt: str) -> str:
+        """Generate using local Ollama API."""
+        if self._client is None:
+            return prompt
+            
+        base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        try:
+            response = self._client.post(
+                f"{base_url}/api/generate",
+                json={
+                    "model": self.model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {
+                        "temperature": self.temperature,
+                        "num_predict": self.max_tokens,
+                    }
+                }
+            )
+            result = response.json()
+            return result.get("response", "")
+        except Exception as e:
+            logger.error(f"Local generation failed: {e}")
             return ""
     
     def _extract_terms_from_text(self, text: str, num_terms: int) -> List[str]:

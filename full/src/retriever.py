@@ -1,0 +1,151 @@
+"""
+Retriever module for the full pipeline.
+
+Wraps the DenseRetriever from the QE experiment's coir module
+into a clean interface for first-stage retrieval.
+"""
+
+import logging
+import sys
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Any
+
+import numpy as np
+from tqdm import tqdm
+
+logger = logging.getLogger(__name__)
+
+
+def _setup_coir_path():
+    """Add the coir module path to sys.path."""
+    qe_path = Path(__file__).parent.parent.parent / "qe"
+    if str(qe_path) not in sys.path:
+        sys.path.insert(0, str(qe_path))
+
+
+class Retriever:
+    """
+    First-stage dense retriever using Multilingual E5.
+    
+    Handles:
+    - Encoding queries with 'query: ' prefix
+    - Encoding corpus with 'passage: ' prefix
+    - Cosine similarity search
+    - Corpus embedding caching
+    """
+    
+    def __init__(
+        self,
+        model_name: str = "intfloat/multilingual-e5-small",
+        device: str = "cpu",
+        batch_size: int = 32,
+        max_seq_length: int = 512,
+    ):
+        """
+        Initialize the retriever.
+        
+        Args:
+            model_name: mE5 model to use
+            device: Device for inference
+            batch_size: Batch size for encoding
+            max_seq_length: Maximum sequence length
+        """
+        _setup_coir_path()
+        from coir.dense_retriever import DenseRetriever
+        
+        logger.info(f"Initializing retriever with model: {model_name}")
+        self._retriever = DenseRetriever(
+            model_name=model_name,
+            device=device,
+            batch_size=batch_size,
+            max_seq_length=max_seq_length,
+        )
+        
+        self.model_name = model_name
+        self._corpus_encoded = False
+    
+    def retrieve(
+        self,
+        queries: Dict[str, str],
+        corpus: Any,
+        top_k: int = 100,
+        show_progress: bool = True,
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Retrieve top-k documents for each query.
+        
+        Args:
+            queries: Dict mapping query_id -> query_text
+            corpus: Corpus in dict or list format
+            top_k: Number of top documents to retrieve
+            show_progress: Show progress bar
+        
+        Returns:
+            Dict mapping query_id -> {
+                "query": str,
+                "retrieved": List[Dict] with 'id', 'score', 'rank', 'text'
+            }
+        """
+        # Build corpus lookup for adding text to results
+        if isinstance(corpus, dict):
+            corpus_lookup = {doc_id: doc_data.get("text", "") for doc_id, doc_data in corpus.items()}
+        elif isinstance(corpus, list):
+            corpus_lookup = {doc.get("id", str(i)): doc.get("text", "") for i, doc in enumerate(corpus)}
+        else:
+            corpus_lookup = {}
+        
+        results = {}
+        
+        for qid, query in tqdm(queries.items(), desc="First-stage retrieval", disable=not show_progress):
+            retrieved = self._retriever.retrieve(
+                queries=[query],
+                corpus=corpus,
+                top_k=top_k,
+            )
+            
+            # Add text to retrieved docs
+            results_with_text = []
+            for doc in retrieved[0]:
+                doc_id = doc['id']
+                results_with_text.append({
+                    **doc,
+                    'text': corpus_lookup.get(doc_id, ''),
+                })
+            
+            results[qid] = {
+                "query": query,
+                "retrieved": results_with_text,
+            }
+        
+        return results
+    
+    def retrieve_with_expanded_queries(
+        self,
+        original_queries: Dict[str, str],
+        expanded_queries: Dict[str, str],
+        corpus: Any,
+        top_k: int = 100,
+        show_progress: bool = True,
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Retrieve using expanded queries but track original queries.
+        
+        Args:
+            original_queries: Dict mapping query_id -> original query text
+            expanded_queries: Dict mapping query_id -> expanded query text
+            corpus: Corpus
+            top_k: Number of top documents
+            show_progress: Show progress bar
+        
+        Returns:
+            Same format as retrieve(), but query is the expanded version
+        """
+        # Use expanded queries for retrieval
+        results = self.retrieve(expanded_queries, corpus, top_k, show_progress)
+        
+        # Add original query info
+        for qid in results:
+            results[qid]["original_query"] = original_queries.get(qid, "")
+            results[qid]["expanded_query"] = expanded_queries.get(qid, "")
+        
+        return results
