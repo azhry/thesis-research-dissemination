@@ -153,12 +153,14 @@ class Retriever:
             
             # Sort by fused score
             fused_retrieved = []
+            orig_doc_ids = {doc["id"]: doc["score"] for doc in orig_data["retrieved"]}
             for doc_id, score in score_map.items():
+                orig_score = orig_doc_ids.get(doc_id, 0.0)
                 fused_retrieved.append({
                     **doc_info[doc_id],
                     "score": score,
-                    "retrieval_score_orig": doc_info[doc_id].get("score", 0.0),
-                    "retrieval_score_exp": score - doc_info[doc_id].get("score", 0.0)
+                    "retrieval_score_orig": orig_score,
+                    "retrieval_score_exp": score - orig_score
                 })
             
             fused_retrieved.sort(key=lambda x: x["score"], reverse=True)

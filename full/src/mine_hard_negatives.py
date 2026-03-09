@@ -29,7 +29,6 @@ def mine_negatives(num_queries=5000, top_k=50, num_hard_negatives=5):
     
     # Process queries (train set only)
     logger.info("Processing training queries...")
-    train_queries = {}
     train_qrel_dict = {}
     for row in qrels_dataset['train']:
         qid = row['query_id']
