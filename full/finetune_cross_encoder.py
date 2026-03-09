@@ -40,10 +40,10 @@ def load_data():
     logger.info(f"Loaded {len(queries)} queries and {len(corpus)} documents.")
     return queries, corpus, corpus_ids, qrels
 
-def build_examples(split_qrels, queries, corpus, corpus_ids, num_negatives=4):
+def build_examples(split_qrels, queries, corpus, corpus_ids, num_negatives=4, hard_negatives=None):
     """
     Builds InputExamples for the cross-encoder.
-    For each positive pair, randomly sample num_negatives negative pairs.
+    Uses hard negatives if available, falling back to random samples.
     """
     examples = []
     qrel_dict = {}
@@ -57,7 +57,7 @@ def build_examples(split_qrels, queries, corpus, corpus_ids, num_negatives=4):
         
         # Add positive example
         score = float(row['score'])
-        # Add prefixes for mE5 compatibility
+        # Add 'query: ' and 'passage: ' prefixes for mE5 compatibility
         examples.append(InputExample(texts=["query: " + queries[qid], "passage: " + corpus[cid]], label=score))
     
     logger.info(f"Added {len(examples)} positive pairs.")
@@ -66,10 +66,19 @@ def build_examples(split_qrels, queries, corpus, corpus_ids, num_negatives=4):
     negatives_added = 0
     for qid, cids in qrel_dict.items():
         query_text = queries[qid]
-        for _ in range(num_negatives):
-            neg_cid = random.choice(corpus_ids)
-            while neg_cid in cids:
+        
+        # Try to use hard negatives first
+        query_hard_negs = hard_negatives.get(qid, []) if hard_negatives else []
+        
+        for i in range(num_negatives):
+            if i < len(query_hard_negs):
+                neg_cid = query_hard_negs[i]
+            else:
+                # Random fallback
                 neg_cid = random.choice(corpus_ids)
+                while neg_cid in cids:
+                    neg_cid = random.choice(corpus_ids)
+                    
             examples.append(InputExample(texts=["query: " + query_text, "passage: " + corpus[neg_cid]], label=0.0))
             negatives_added += 1
             
@@ -79,10 +88,12 @@ def build_examples(split_qrels, queries, corpus, corpus_ids, num_negatives=4):
 
 def run_finetuning():
     import argparse
+    import json
+    import os
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-name", type=str, default="intfloat/multilingual-e5-small",
                        help="Base model to fine-tune as cross-encoder")
-    parser.add_argument("--output-dir", type=str, default="./full/models/cross-encoder-me5-small",
+    parser.add_argument("--output-dir", type=str, default="./full/models/cross-encoder-me5-small-full-hn",
                        help="Path to save the fine-tuned model")
     parser.add_argument("--num-epochs", type=int, default=3)
     parser.add_argument("--batch-size", type=int, default=16)
@@ -91,6 +102,8 @@ def run_finetuning():
     parser.add_argument("--num-negatives", type=int, default=4, help="Negative samples per positive")
     parser.add_argument("--train-samples", type=int, default=None, help="Limit training samples")
     parser.add_argument("--val-samples", type=int, default=None, help="Limit validation samples")
+    parser.add_argument("--hard-negatives", type=str, default="./full/data/hard_negatives.json", 
+                        help="Path to pre-mined hard negatives")
     
     args = parser.parse_args()
     
@@ -99,12 +112,19 @@ def run_finetuning():
     
     queries, corpus, corpus_ids, qrels = load_data()
     
+    # Load hard negatives
+    hard_negs = None
+    if os.path.exists(args.hard_negatives):
+        logger.info(f"Loading hard negatives from {args.hard_negatives}")
+        with open(args.hard_negatives, 'r') as f:
+            hard_negs = json.load(f)
+    
     logger.info("Building training examples...")
     train_qrels = qrels['train']
     if args.train_samples:
-        train_qrels = [row for i, row in enumerate(train_qrels) if i < args.train_samples]
+        train_qrels = [row for i, row in enumerate(train_qrels) if i < args.train_samples][:args.train_samples]
     
-    train_examples = build_examples(train_qrels, queries, corpus, corpus_ids, args.num_negatives)
+    train_examples = build_examples(train_qrels, queries, corpus, corpus_ids, args.num_negatives, hard_negs)
     train_dataloader = DataLoader(train_examples, shuffle=True, batch_size=args.batch_size)
     
     logger.info("Building validation examples...")
@@ -113,17 +133,14 @@ def run_finetuning():
     elif 'dev' in qrels:
         val_qrels = qrels['dev']
     else:
-        # Fallback if no validation split, use a small subset of test
         val_qrels = qrels['test']
         
     if args.val_samples:
         val_qrels = [row for i, row in enumerate(val_qrels) if i < args.val_samples]
     else:
-        # Default limit if not specified to speed up eval
         val_qrels = [row for i, row in enumerate(val_qrels) if i < 1000]
         
-    # We use fewer negatives for validation to speed it up
-    dev_examples = build_examples(val_qrels, queries, corpus, corpus_ids, num_negatives=1)
+    dev_examples = build_examples(val_qrels, queries, corpus, corpus_ids, num_negatives=1, hard_negatives=hard_negs)
     
     # For evaluation, BCE needs arrays of texts and labels
     dev_sentence_pairs = [[ex.texts[0], ex.texts[1]] for ex in dev_examples]
@@ -140,7 +157,7 @@ def run_finetuning():
         train_dataloader=train_dataloader,
         evaluator=evaluator,
         epochs=args.num_epochs,
-        evaluation_steps=1000,
+        evaluation_steps=9999999, # Evaluate only at end of epoch to speed up
         warmup_steps=warmup_steps,
         optimizer_params={'lr': args.learning_rate},
         output_path=str(output_path),

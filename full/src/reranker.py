@@ -138,66 +138,61 @@ class Reranker:
         self,
         first_stage_results: Dict[str, Dict[str, Any]],
         top_k: int = 10,
-        doc_max_chars: int = 512,
+        doc_max_chars: int = 1024,
         show_progress: bool = True,
+        rrf_k: int = 60,  # Hyperparameter for RRF
     ) -> Dict[str, Dict[str, Any]]:
         """
-        Re-rank first-stage retrieval results.
+        Re-rank results using Reciprocal Rank Fusion (RRF).
         
-        Args:
-            first_stage_results: Dict mapping query_id -> {
-                "query": str,
-                "retrieved": List[Dict] with 'id', 'score', 'text'
-            }
-            top_k: Number of top documents to return after reranking
-            doc_max_chars: Maximum characters per document for scoring
-            show_progress: Show progress bar
-        
-        Returns:
-            Dict mapping query_id -> {
-                "query": str,
-                "first_stage": List[Dict] (top_k from first stage),
-                "reranked": List[Dict] with added 'cross_encoder_score'
-            }
+        RRF is much more robust than score normalization because it only cares 
+        about the order. It prevents a 'bad' reranker from destroying performance.
         """
         results = {}
         
         for qid, data in tqdm(first_stage_results.items(), desc="Re-ranking", disable=not show_progress):
-            query = data["query"]
+            query = data.get("original_query", data["query"])
             first_stage_docs = data["retrieved"]
             
-            # Extract document texts (truncated)
-            doc_texts = [doc.get('text', '')[:doc_max_chars] for doc in first_stage_docs]
-            
-            # Skip if no documents
-            if not doc_texts:
-                results[qid] = {
-                    "query": query,
-                    "first_stage": [],
-                    "reranked": [],
-                }
+            if not first_stage_docs:
+                results[qid] = {"query": data["query"], "first_stage": [], "reranked": []}
                 continue
             
-            # Score with cross-encoder
-            scores = self.score(query, doc_texts)
+            # 1. Get Reranker Scores
+            doc_texts = [doc.get('text', '')[:doc_max_chars] for doc in first_stage_docs]
+            ce_scores = self.score(query, doc_texts)
             
-            # Add scores and rerank
+            # 2. Get Ranks for RRF
+            # First-stage rank (already 1, 2, 3...)
+            # Reranker rank (sort ce_scores)
+            ce_order = np.argsort(ce_scores)[::-1]
+            ce_ranks = {first_stage_docs[idx]['id']: rank + 1 for rank, idx in enumerate(ce_order)}
+            
+            # 3. Apply RRF Formula: Score = 1/(k + rank_retrieval) + 1/(k + rank_reranker)
             reranked_docs = []
-            for doc, ce_score in zip(first_stage_docs, scores):
+            for i, doc in enumerate(first_stage_docs):
+                doc_id = doc['id']
+                rank_ret = i + 1
+                rank_ce = ce_ranks[doc_id]
+                
+                rrf_score = (1.0 / (rrf_k + rank_ret)) + (1.0 / (rrf_k + rank_ce))
+                
                 reranked_docs.append({
                     **doc,
-                    'cross_encoder_score': float(ce_score),
+                    'cross_encoder_score': float(ce_scores[i]),
+                    'rrf_score': float(rrf_score),
+                    'ce_rank': rank_ce
                 })
             
-            reranked_docs.sort(key=lambda x: x['cross_encoder_score'], reverse=True)
+            # Sort by RRF score
+            reranked_docs.sort(key=lambda x: x['rrf_score'], reverse=True)
             
             results[qid] = {
-                "query": query,
+                "query": data["query"],
                 "first_stage": first_stage_docs[:top_k],
                 "reranked": reranked_docs[:top_k],
             }
             
-            # Carry over extra fields
             for key in ("original_query", "expanded_query"):
                 if key in data:
                     results[qid][key] = data[key]

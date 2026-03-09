@@ -138,7 +138,7 @@ RERANKER_MODEL_MAP = {
     RerankerModel.MMMINI_MULTILINGUAL: "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
     RerankerModel.XLM_ROBERTA: "cross-encoder/stsb-roberta-base",
     RerankerModel.MBERT: "cross-encoder/ms-marco-MiniLM-L-12-v2",
-    RerankerModel.CUSTOM: "./full/models/cross-encoder-me5-small-full",
+    RerankerModel.CUSTOM: "./full/models/cross-encoder-me5-small-full-hn-v1",
 }
 
 RETRIEVER_MODEL_MAP = {
