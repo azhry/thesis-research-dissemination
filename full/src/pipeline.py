@@ -123,6 +123,7 @@ class Pipeline:
         logger.info(f"{'='*60}")
         
         timing = {}
+        diagnostics = {}
         
         # ── Step 1: Query Expansion (if enabled) ──
         expanded_queries = None
@@ -181,11 +182,19 @@ class Pipeline:
             tqe_eval = evaluate_retrieval(first_stage_results, qrels, [10])
             diff = tqe_eval['nDCG@10'] - baseline_eval['nDCG@10']
             
-            logger.info(f"{'-'*40}")
-            logger.info(f"  [TQE DIAGNOSTIC] Impact on First-Stage Retrieval ({language}):")
-            logger.info(f"  Baseline nDCG@10:   {baseline_eval['nDCG@10']:.4f}")
-            logger.info(f"  TQE-Boosted nDCG@10: {tqe_eval['nDCG@10']:.4f} ({diff:+.4f})")
-            logger.info(f"{'-'*40}")
+            tqe_impact = {
+                "baseline_ndcg": baseline_eval['nDCG@10'],
+                "boosted_ndcg": tqe_eval['nDCG@10'],
+                "diff": diff
+            }
+            
+            print(f"\n{'-'*60}")
+            print(f"  [TQE DIAGNOSTIC] Impact on First-Stage Retrieval ({language}):")
+            print(f"  Baseline nDCG@10:    {baseline_eval['nDCG@10']:.4f}")
+            print(f"  TQE-Boosted nDCG@10: {tqe_eval['nDCG@10']:.4f} ({diff:+.4f})")
+            print(f"{'-'*60}\n")
+            
+            diagnostics["tqe_impact"] = tqe_impact
         else:
             first_stage_results = retriever.retrieve(
                 queries=queries,
@@ -239,6 +248,7 @@ class Pipeline:
             "config": self.config.to_dict(),
             "metrics": eval_metrics,
             "timing": timing,
+            "diagnostics": diagnostics,
             "num_queries": len(queries),
         }
         

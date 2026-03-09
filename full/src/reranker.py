@@ -140,13 +140,15 @@ class Reranker:
         top_k: int = 10,
         doc_max_chars: int = 1024,
         show_progress: bool = True,
-        rerank_weight: float = 0.7,  # Weight for the cross-encoder (0.0 to 1.0)
+        rrf_k: int = 60,  # Hyperparameter for RRF
     ) -> Dict[str, Dict[str, Any]]:
         """
-        Re-rank results using score fusion between retrieval and re-ranking.
+        Re-rank results using Reciprocal Rank Fusion (RRF).
+        
+        RRF is much more robust than score normalization because it only cares 
+        about the order. It prevents a 'bad' reranker from destroying performance.
         """
         results = {}
-        retrieval_weight = 1.0 - rerank_weight
         
         for qid, data in tqdm(first_stage_results.items(), desc="Re-ranking", disable=not show_progress):
             query = data.get("original_query", data["query"])
@@ -160,41 +162,30 @@ class Reranker:
             doc_texts = [doc.get('text', '')[:doc_max_chars] for doc in first_stage_docs]
             ce_scores = self.score(query, doc_texts)
             
-            # 2. Normalize Scores for Fusion
-            # Normalize CE scores to [0, 1]
-            if len(ce_scores) > 1:
-                ce_min, ce_max = ce_scores.min(), ce_scores.max()
-                if ce_max > ce_min:
-                    normalized_ce = (ce_scores - ce_min) / (ce_max - ce_min)
-                else:
-                    normalized_ce = np.ones_like(ce_scores)
-            else:
-                normalized_ce = np.array([1.0])
-                
-            # Extract and normalize retrieval scores
-            ret_scores = np.array([doc.get('score', 0.0) for doc in first_stage_docs])
-            if len(ret_scores) > 1:
-                ret_min, ret_max = ret_scores.min(), ret_scores.max()
-                if ret_max > ret_min:
-                    normalized_ret = (ret_scores - ret_min) / (ret_max - ret_min)
-                else:
-                    normalized_ret = np.ones_like(ret_scores)
-            else:
-                normalized_ret = np.array([1.0])
+            # 2. Get Ranks for RRF
+            # First-stage rank (already 1, 2, 3...)
+            # Reranker rank (sort ce_scores)
+            ce_order = np.argsort(ce_scores)[::-1]
+            ce_ranks = {first_stage_docs[idx]['id']: rank + 1 for rank, idx in enumerate(ce_order)}
             
-            # 3. Combine Scores (Weighted Fusion)
+            # 3. Apply RRF Formula: Score = 1/(k + rank_retrieval) + 1/(k + rank_reranker)
             reranked_docs = []
             for i, doc in enumerate(first_stage_docs):
-                fused_score = (rerank_weight * normalized_ce[i]) + (retrieval_weight * normalized_ret[i])
+                doc_id = doc['id']
+                rank_ret = i + 1
+                rank_ce = ce_ranks[doc_id]
+                
+                rrf_score = (1.0 / (rrf_k + rank_ret)) + (1.0 / (rrf_k + rank_ce))
+                
                 reranked_docs.append({
                     **doc,
                     'cross_encoder_score': float(ce_scores[i]),
-                    'retrieval_score': float(ret_scores[i]),
-                    'fused_score': float(fused_score),
+                    'rrf_score': float(rrf_score),
+                    'ce_rank': rank_ce
                 })
             
-            # Sort by fused score
-            reranked_docs.sort(key=lambda x: x['fused_score'], reverse=True)
+            # Sort by RRF score
+            reranked_docs.sort(key=lambda x: x['rrf_score'], reverse=True)
             
             results[qid] = {
                 "query": data["query"],

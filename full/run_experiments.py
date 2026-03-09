@@ -285,6 +285,23 @@ def print_summary(all_results: Dict[str, Dict[str, Any]]):
                 print(f"    nDCG@10: {ndcg_before:.4f} → {ndcg_after:.4f} ({ndcg_diff:+.4f})")
                 print(f"    MAP@10:  {map_before:.4f} → {map_after:.4f} ({map_diff:+.4f})")
     
+    # TQE Impact comparison
+    print(f"\n{'─' * 90}")
+    print("  TQE IMPACT (Baseline → Expanded Retrieval)")
+    print(f"{'─' * 90}")
+    
+    for exp_name, exp_results in all_results.items():
+        for lang in ["english", "indonesian"]:
+            if lang not in exp_results:
+                continue
+            
+            timing = exp_results[lang].get("timing", {})
+            diagnostics = exp_results[lang].get("diagnostics", {})
+            if "tqe_impact" in diagnostics:
+                impact = diagnostics["tqe_impact"]
+                print(f"  {exp_name} ({lang}):")
+                print(f"    nDCG@10: {impact['baseline_ndcg']:.4f} → {impact['boosted_ndcg']:.4f} ({impact['diff']:+.4f})")
+    
     # Cross-lingual gap
     print(f"\n{'─' * 90}")
     print("  CROSS-LINGUAL GAP (Indonesian − English)")
