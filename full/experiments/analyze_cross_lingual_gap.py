@@ -51,8 +51,8 @@ def evaluate_embedding_alignment(queries_en, queries_id, retriever):
     
     qids = list(queries_id.keys())[:2000] # Use a subset for speed
     
-    en_texts = [queries_en[qid] for qid in qids]
-    id_texts = [queries_id[qid] for qid in qids]
+    en_texts = [queries_en.get(qid, "") for qid in qids]
+    id_texts = [queries_id.get(qid, "") for qid in qids]
     
     # We directly use the DenseRetriever inside the retriever
     en_embeddings = retriever._retriever.encode_queries(en_texts)
@@ -104,7 +104,11 @@ def check_reranker_sensitivity(queries_en, queries_id, qrels, dataset, reranker_
     id_scores = []
     
     for qid in tqdm(qids, desc="Reranking positive pairs"):
+        if not qrel_dict.get(qid):
+            continue
         cid = qrel_dict[qid][0] # take first positive
+        if cid not in corpus_dict:
+            continue
         doc_text = corpus_dict[cid][:1024]
         
         en_q = queries_en[qid]

@@ -75,6 +75,8 @@ class PipelineConfig:
     reranker_max_length: int = 512
     reranker_batch_size: int = 8
     reranker_top_k: int = 10
+    reranker_use_rrf: bool = True  # Use RRF to combine Bi-Encoder + Cross-Encoder
+    reranker_rrf_k: int = 100
     
     # === Evaluation ===
     eval_k_values: List[int] = field(default_factory=lambda: [1, 5, 10, 20, 50, 100])
@@ -132,13 +134,15 @@ class PipelineConfig:
         }
 
 
+PROJECT_DIR = Path(__file__).parent.parent.absolute()
+
 # === Model name mappings ===
 RERANKER_MODEL_MAP = {
     RerankerModel.MMMINI: "cross-encoder/ms-marco-MiniLM-L-6-v2",
     RerankerModel.MMMINI_MULTILINGUAL: "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
     RerankerModel.XLM_ROBERTA: "cross-encoder/stsb-roberta-base",
     RerankerModel.MBERT: "cross-encoder/ms-marco-MiniLM-L-12-v2",
-    RerankerModel.CUSTOM: "./full/models/cross-encoder-me5-small-full-hn-v1",
+    RerankerModel.CUSTOM: str(PROJECT_DIR / "models" / "cross-encoder-me5-small-full-hn-v2"),
 }
 
 RETRIEVER_MODEL_MAP = {

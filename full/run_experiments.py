@@ -61,6 +61,8 @@ def run_single_experiment(
         llm_model=args.llm_model,
         reranker_model_type=RerankerModel(args.reranker_model),
         reranker_top_k=args.top_k,
+        reranker_use_rrf=not args.reranker_no_rrf,
+        reranker_rrf_k=args.reranker_rrf_k,
         device=args.device,
         sample_size=args.sample_size,
         eval_k_values=[1, 5, 10, 20, 50, 100],
@@ -217,9 +219,9 @@ def print_summary(all_results: Dict[str, Dict[str, Any]]):
     key_metrics = ["nDCG@10", "MAP@10", "Recall@10", "MRR@10"]
     
     for lang in ["english", "indonesian"]:
-        print(f"\n{'─' * 90}")
+        print(f"\n{'-' * 90}")
         print(f"  {lang.upper()} QUERIES")
-        print(f"{'─' * 90}")
+        print(f"{'-' * 90}")
         
         # Header
         header = f"{'Experiment':<25}"
@@ -258,9 +260,9 @@ def print_summary(all_results: Dict[str, Dict[str, Any]]):
         print()
     
     # Print before/after comparison for experiments with reranking
-    print(f"\n{'─' * 90}")
-    print("  RE-RANKING IMPACT (Before → After)")
-    print(f"{'─' * 90}")
+    print(f"\n{'-' * 90}")
+    print("  RE-RANKING IMPACT (Before -> After)")
+    print(f"{'-' * 90}")
     
     for exp_name, exp_results in all_results.items():
         for lang in ["english", "indonesian"]:
@@ -282,13 +284,13 @@ def print_summary(all_results: Dict[str, Dict[str, Any]]):
                 map_diff = map_after - map_before
                 
                 print(f"  {exp_name} ({lang}):")
-                print(f"    nDCG@10: {ndcg_before:.4f} → {ndcg_after:.4f} ({ndcg_diff:+.4f})")
-                print(f"    MAP@10:  {map_before:.4f} → {map_after:.4f} ({map_diff:+.4f})")
+                print(f"    nDCG@10: {ndcg_before:.4f} -> {ndcg_after:.4f} ({ndcg_diff:+.4f})")
+                print(f"    MAP@10:  {map_before:.4f} -> {map_after:.4f} ({map_diff:+.4f})")
     
     # TQE Impact comparison
-    print(f"\n{'─' * 90}")
-    print("  TQE IMPACT (Baseline → Expanded Retrieval)")
-    print(f"{'─' * 90}")
+    print(f"\n{'-' * 90}")
+    print("  TQE IMPACT (Baseline -> Expanded Retrieval)")
+    print(f"{'-' * 90}")
     
     for exp_name, exp_results in all_results.items():
         for lang in ["english", "indonesian"]:
@@ -303,9 +305,9 @@ def print_summary(all_results: Dict[str, Dict[str, Any]]):
                 print(f"    nDCG@10: {impact['baseline_ndcg']:.4f} → {impact['boosted_ndcg']:.4f} ({impact['diff']:+.4f})")
     
     # Cross-lingual gap
-    print(f"\n{'─' * 90}")
+    print(f"\n{'-' * 90}")
     print("  CROSS-LINGUAL GAP (Indonesian − English)")
-    print(f"{'─' * 90}")
+    print(f"{'-' * 90}")
     
     for exp_name, exp_results in all_results.items():
         if "english" not in exp_results or "indonesian" not in exp_results:
@@ -366,15 +368,19 @@ def main():
     parser.add_argument("--llm-model", type=str, default="models/gemini-flash-latest")
     
     # Reranker settings
-    parser.add_argument("--reranker-model", type=str, default="mmmini",
+    parser.add_argument("--reranker-model", type=str, default="custom",
                         choices=["mmmini", "mmmini_multilingual", "xlm", "mbert", "custom"])
-    parser.add_argument("--top-k", type=int, default=10)
+    parser.add_argument("--reranker-no-rrf", action="store_true", help="Disable RRF fusion")
+    parser.set_defaults(reranker_use_rrf=True)
+    parser.add_argument("--reranker-rrf-k", type=int, default=60, help="RRF k parameter")
+    parser.add_argument("--top-k", type=int, default=10, help="Top-K for reranking/eval")
     
     # General settings
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--sample-size", type=int, default=None,
                         help="Limit number of queries (for testing)")
-    parser.add_argument("--output", type=str, default="./full/results/full_experiment_results.json")
+    PROJECT_DIR = Path(__file__).parent.absolute()
+    parser.add_argument("--output", type=str, default=str(PROJECT_DIR / "results" / "full_experiment_results.json"))
     
     args = parser.parse_args()
     

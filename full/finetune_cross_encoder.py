@@ -91,8 +91,8 @@ def run_finetuning():
     import json
     import os
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-name", type=str, default="intfloat/multilingual-e5-small",
-                       help="Base model to fine-tune as cross-encoder")
+    parser.add_argument("--model-name", type=str, default="cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
+                       help="Base model to fine-tune (specialized Cross-Encoder)")
     parser.add_argument("--output-dir", type=str, default="./full/models/cross-encoder-me5-small-full-hn",
                        help="Path to save the fine-tuned model")
     parser.add_argument("--num-epochs", type=int, default=3)
@@ -157,7 +157,7 @@ def run_finetuning():
         train_dataloader=train_dataloader,
         evaluator=evaluator,
         epochs=args.num_epochs,
-        evaluation_steps=9999999, # Evaluate only at end of epoch to speed up
+        evaluation_steps=len(train_dataloader), # Evaluate and save every epoch
         warmup_steps=warmup_steps,
         optimizer_params={'lr': args.learning_rate},
         output_path=str(output_path),

@@ -78,7 +78,7 @@ class FineTuningTrainingConfig:
     
     # Training hyperparameters
     learning_rate: float = 2e-5
-    num_epochs: int = 3
+    num_epochs: int = 10
     batch_size: int = 16
     warmup_steps: int = 100
     gradient_accumulation_steps: int = 1

@@ -100,6 +100,7 @@ class Pipeline:
         corpus: Any,
         qrels: Dict[str, Dict[str, int]],
         language: str = "unknown",
+        rerank_queries: Optional[Dict[str, str]] = None
     ) -> Dict[str, Any]:
         """
         Run the pipeline on a set of queries.
@@ -109,13 +110,10 @@ class Pipeline:
             corpus: Corpus data
             qrels: Relevance judgments
             language: Language label for logging
+            rerank_queries: Optional mapping of qid -> alternative query for reranking (e.g. English)
         
         Returns:
-            Dict with:
-                - "results": per-query results
-                - "metrics": evaluation metrics
-                - "timing": execution time per stage
-                - "config": pipeline configuration used
+            Dict with metrics and results
         """
         logger.info(f"{'='*60}")
         logger.info(f"Running pipeline on {language} queries ({len(queries)} queries)")
@@ -139,9 +137,15 @@ class Pipeline:
             
             timing["query_expansion"] = time.time() - t0
             logger.info(f"  Query expansion completed in {timing['query_expansion']:.2f}s")
+            
+            # Log sample expansions
+            sample_count = min(2, len(expanded_queries))
+            sample_qids = list(expanded_queries.keys())[:sample_count]
+            for qid in sample_qids:
+                logger.info(f"  [TQE DEBUG] QID {qid}: {queries[qid]} -> {expanded_queries[qid][:100]}...")
         else:
             logger.info("Step 1: Query Expansion SKIPPED")
-            expanded_queries = queries  # Use original queries
+            expanded_queries = queries
         
         # ── Step 2: First-Stage Retrieval ──
         logger.info("Step 2: First-Stage Retrieval (mE5)...")
@@ -150,26 +154,11 @@ class Pipeline:
         retriever = self._get_retriever()
         
         if self.config.enable_tqe:
-            # 1. Baseline retrieval (Original Queries)
-            logger.info("  Running baseline retrieval for diagnostic comparison...")
-            results_original = retriever.retrieve(
-                queries=queries,
-                corpus=corpus,
-                top_k=self.config.first_stage_top_k,
-                show_progress=False
-            )
+            # Baseline for comparison
+            results_original = retriever.retrieve(queries=queries, corpus=corpus, top_k=self.config.first_stage_top_k, show_progress=False)
+            results_expanded = retriever.retrieve(queries=expanded_queries, corpus=corpus, top_k=self.config.first_stage_top_k, show_progress=False)
             
-            # 2. Expansion retrieval (Expanded Queries)
-            logger.info("  Running retrieval with expanded queries...")
-            results_expanded = retriever.retrieve(
-                queries=expanded_queries,
-                corpus=corpus,
-                top_k=self.config.first_stage_top_k,
-                show_progress=False
-            )
-            
-            # 3. Hybrid Fusion
-            logger.info("  Fusing results (Hybrid Search)...")
+            # Hybrid Fusion
             first_stage_results = retriever.fuse_results(
                 results_original=results_original,
                 results_expanded=results_expanded,
@@ -177,16 +166,10 @@ class Pipeline:
                 expansion_weight=0.3
             )
             
-            # Log the impact
+            # Log impact
             baseline_eval = evaluate_retrieval(results_original, qrels, [10])
             tqe_eval = evaluate_retrieval(first_stage_results, qrels, [10])
             diff = tqe_eval['nDCG@10'] - baseline_eval['nDCG@10']
-            
-            tqe_impact = {
-                "baseline_ndcg": baseline_eval['nDCG@10'],
-                "boosted_ndcg": tqe_eval['nDCG@10'],
-                "diff": diff
-            }
             
             print(f"\n{'-'*60}")
             print(f"  [TQE DIAGNOSTIC] Impact on First-Stage Retrieval ({language}):")
@@ -194,7 +177,11 @@ class Pipeline:
             print(f"  TQE-Boosted nDCG@10: {tqe_eval['nDCG@10']:.4f} ({diff:+.4f})")
             print(f"{'-'*60}\n")
             
-            diagnostics["tqe_impact"] = tqe_impact
+            diagnostics["tqe_impact"] = {
+                "baseline_ndcg": baseline_eval['nDCG@10'],
+                "boosted_ndcg": tqe_eval['nDCG@10'],
+                "diff": diff
+            }
         else:
             first_stage_results = retriever.retrieve(
                 queries=queries,
@@ -202,80 +189,58 @@ class Pipeline:
                 top_k=self.config.first_stage_top_k,
             )
         
+        # Inject rerank queries if available
+        for qid, res in first_stage_results.items():
+            if rerank_queries and qid in rerank_queries:
+                res["rerank_query"] = rerank_queries[qid]
+            # Ensure we have the original query for precision reranking
+            res["original_query"] = queries.get(qid, res.get("query"))
+            
         timing["retrieval"] = time.time() - t0
-        logger.info(f"  Retrieval completed in {timing['retrieval']:.2f}s")
         
-        # ── Step 3: Cross-Encoder Re-ranking (if enabled) ──
+        # ── Step 3: Cross-Encoder Re-ranking ──
         reranked_results = None
-        
         if self.config.enable_reranker:
             logger.info("Step 3: Cross-Encoder Re-ranking...")
             t0 = time.time()
             
+            rerank_query_texts = {}
+            for qid, data in first_stage_results.items():
+                # PRIORITY: 1. Manual Translation-for-Rerank > 2. Original Query > 3. Retrieval Query (HyDE)
+                rerank_query_texts[qid] = data.get("rerank_query", data.get("original_query", data["query"]))
+            
             reranker = self._get_reranker()
             reranked_results = reranker.rerank(
                 first_stage_results=first_stage_results,
+                queries=rerank_query_texts,
                 top_k=self.config.reranker_top_k,
+                use_rrf=self.config.reranker_use_rrf,
+                rrf_k=self.config.reranker_rrf_k
             )
-            
             timing["reranking"] = time.time() - t0
-            logger.info(f"  Re-ranking completed in {timing['reranking']:.2f}s")
-        else:
-            logger.info("Step 3: Cross-Encoder Re-ranking SKIPPED")
         
         # ── Step 4: Evaluation ──
         logger.info("Step 4: Evaluation...")
         t0 = time.time()
-        
         k_values = self.config.eval_k_values
         
         if self.config.enable_reranker and reranked_results is not None:
-            # Evaluate both first-stage and reranked
             eval_metrics = evaluate_reranking(reranked_results, qrels, k_values)
         else:
-            # Evaluate first-stage only
-            eval_metrics = {
-                "retrieval": evaluate_retrieval(first_stage_results, qrels, k_values),
-            }
-        
+            eval_metrics = {"retrieval": evaluate_retrieval(first_stage_results, qrels, k_values)}
+            
         timing["evaluation"] = time.time() - t0
         timing["total"] = sum(timing.values())
         
-        # ── Build output ──
-        output = {
+        return {
             "language": language,
             "experiment_type": self.config.experiment_type.value,
-            "config": self.config.to_dict(),
             "metrics": eval_metrics,
             "timing": timing,
             "diagnostics": diagnostics,
-            "num_queries": len(queries),
+            "raw_results": reranked_results if reranked_results else first_stage_results
         }
-        
-        # Add QE info if used
-        if qe_results is not None:
-            output["qe_info"] = {
-                "method": self.config.qe_method.value,
-                "num_terms": self.config.qe_num_terms,
-                "sample_expansions": [
-                    {
-                        "qid": qid,
-                        "original": r.original_query,
-                        "expanded": r.expanded_query,
-                        "terms": r.expansion_terms,
-                    }
-                    for qid, r in list(qe_results.items())[:5]
-                ],
-            }
-        
-        # Store raw results for detailed output
-        if reranked_results is not None:
-            output["raw_results"] = reranked_results
-        else:
-            output["raw_results"] = first_stage_results
-        
-        return output
-    
+
     def run_bilingual(
         self,
         queries_english: Dict[str, str],
@@ -283,24 +248,17 @@ class Pipeline:
         corpus: Any,
         qrels: Dict[str, Dict[str, int]],
     ) -> Dict[str, Any]:
-        """
-        Run the pipeline on both English and Indonesian queries.
-        
-        Args:
-            queries_english: English queries
-            queries_indonesian: Indonesian queries
-            corpus: Corpus data
-            qrels: Relevance judgments
-        
-        Returns:
-            Dict with results for both languages
-        """
+        """Run on both languages."""
         results = {}
-        
-        # Run English queries
+        # English: Direct run
         results["english"] = self.run(queries_english, corpus, qrels, language="english")
         
-        # Run Indonesian queries
-        results["indonesian"] = self.run(queries_indonesian, corpus, qrels, language="indonesian")
-        
+        # Indonesian: Use English as Translate-for-Rerank queries
+        results["indonesian"] = self.run(
+            queries_indonesian, 
+            corpus, 
+            qrels, 
+            language="indonesian",
+            rerank_queries=queries_english
+        )
         return results
