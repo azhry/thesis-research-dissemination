@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 
 import numpy as np
+import torch
 from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
@@ -91,10 +92,26 @@ class Reranker:
         self.batch_size = batch_size
         
         logger.info(f"Loading CrossEncoder: {model_name}")
+        
+        # Patch for Jina Reranker v2: it uses a function removed in transformers >= 5.0
+        if "jina" in model_name.lower():
+            try:
+                from transformers.models.xlm_roberta import modeling_xlm_roberta
+                if not hasattr(modeling_xlm_roberta, 'create_position_ids_from_input_ids'):
+                    def create_position_ids_from_input_ids(input_ids, padding_idx, past_key_values_length=0):
+                        mask = input_ids.ne(padding_idx).int()
+                        incremental_indices = (torch.cumsum(mask, dim=1).type_as(mask) + past_key_values_length) * mask
+                        return incremental_indices.long() + padding_idx
+                    modeling_xlm_roberta.create_position_ids_from_input_ids = create_position_ids_from_input_ids
+                    logger.info("Patched create_position_ids_from_input_ids for Jina compatibility")
+            except Exception as e:
+                logger.warning(f"Could not apply Jina compatibility patch: {e}")
+        
         self._model = CrossEncoder(
             model_name,
             max_length=max_length,
             device=device,
+            trust_remote_code=True,  # Required for Jina Reranker v2
         )
         
         logger.info(f"CrossEncoder loaded on {device}")
@@ -114,18 +131,16 @@ class Reranker:
         Returns:
             Array of relevance scores
         """
-        # Add prefixes ONLY if it's an E5-based model (like our custom one)
-        # MS MARCO models (MiniLM) were NOT trained with these prefixes.
-        is_e5 = ("e5" in self.model_name.lower()) or (self.model_type == "custom")
+        # Only add E5 prefixes for actual E5-based models
+        # Custom models (CoSQA-trained) use raw text — NO prefixes
+        is_e5 = ("e5" in self.model_name.lower()) and (self.model_type != "custom")
         
         if is_e5:
-            q_prefix = "query: "
-            d_prefix = "passage: "
-            pairs = [[q_prefix + query, d_prefix + doc] for doc in documents]
-            # logger.debug(f"Using E5 prefixes for reranking with {self.model_name}")
+            clean_query = query.replace("query: ", "").strip()
+            pairs = [["query: " + clean_query, "passage: " + doc] for doc in documents]
         else:
+            # Raw text pairs for MS MARCO and CoSQA-trained models
             pairs = [[query, doc] for doc in documents]
-            # logger.debug(f"No prefixes used for reranking with {self.model_name}")
         
         scores = self._model.predict(
             pairs,
@@ -140,57 +155,89 @@ class Reranker:
         top_k: int = 10,
         doc_max_chars: int = 1024,
         show_progress: bool = True,
-        rrf_k: int = 60,  # Hyperparameter for RRF
+        use_rrf: bool = False,
+        rrf_k: int = 60,
+        queries: Optional[Dict[str, str]] = None,
+        confidence_threshold: float = 0.0  # Set to 0.0 to always rerank, >0 for gating
     ) -> Dict[str, Dict[str, Any]]:
         """
-        Re-rank results using Reciprocal Rank Fusion (RRF).
+        Re-rank first-stage results using cross-encoder scores.
         
-        RRF is much more robust than score normalization because it only cares 
-        about the order. It prevents a 'bad' reranker from destroying performance.
+        Args:
+            first_stage_results: Dict from retriever.retrieve or fuse_results
+            top_k: Number of docs to keep after reranking
+            doc_max_chars: Max characters to send to cross-encoder
+            show_progress: Show progress bar
+            use_rrf: Whether to use Reciprocal Rank Fusion
+            rrf_k: Smoothing constant for RRF
+            queries: Optional mapping of qid -> rerank_query text (e.g. English version)
+        
+        Standard IR reranking: the cross-encoder scores replace the initial
+        ranking. Documents are sorted purely by cross-encoder relevance score.
+        
+        Optional: use_rrf=True will use Reciprocal Rank Fusion to combine signals.
         """
         results = {}
         
         for qid, data in tqdm(first_stage_results.items(), desc="Re-ranking", disable=not show_progress):
-            query = data.get("original_query", data["query"])
+            # Resolve query:
+            # We prioritize the original/manual query for reranking. 
+            # HyDE is great for retrieval, but its 'hallucinations' can distract a Cross-Encoder.
+            if queries and qid in queries:
+                query = queries[qid]
+            else:
+                # Use original_query if available, fallback to the (possibly expanded) data["query"]
+                query = data.get("original_query", data["query"])
+            
             first_stage_docs = data["retrieved"]
             
             if not first_stage_docs:
                 results[qid] = {"query": data["query"], "first_stage": [], "reranked": []}
                 continue
             
-            # 1. Get Reranker Scores
+            # 1. Get Cross-Encoder Scores
             doc_texts = [doc.get('text', '')[:doc_max_chars] for doc in first_stage_docs]
             ce_scores = self.score(query, doc_texts)
             
-            # 2. Get Ranks for RRF
-            # First-stage rank (already 1, 2, 3...)
-            # Reranker rank (sort ce_scores)
-            ce_order = np.argsort(ce_scores)[::-1]
-            ce_ranks = {first_stage_docs[idx]['id']: rank + 1 for rank, idx in enumerate(ce_order)}
-            
-            # 3. Apply RRF Formula: Score = 1/(k + rank_retrieval) + 1/(k + rank_reranker)
-            reranked_docs = []
+            # 2. Attach scores to documents
+            docs_with_ce = []
             for i, doc in enumerate(first_stage_docs):
-                doc_id = doc['id']
-                rank_ret = i + 1
-                rank_ce = ce_ranks[doc_id]
-                
-                rrf_score = (1.0 / (rrf_k + rank_ret)) + (1.0 / (rrf_k + rank_ce))
-                
-                reranked_docs.append({
+                docs_with_ce.append({
                     **doc,
                     'cross_encoder_score': float(ce_scores[i]),
-                    'rrf_score': float(rrf_score),
-                    'ce_rank': rank_ce
+                    'initial_rank': i + 1
                 })
             
-            # Sort by RRF score
-            reranked_docs.sort(key=lambda x: x['rrf_score'], reverse=True)
+            # 3. Determine Final Ranking
+            if use_rrf:
+                # Standard RRF: equal-weight fusion of Bi-Encoder and Cross-Encoder
+                # Rank by CE score first to get CE rank
+                docs_with_ce.sort(key=lambda x: x['cross_encoder_score'], reverse=True)
+                for i, doc in enumerate(docs_with_ce):
+                    doc['ce_rank'] = i + 1
+                    # Formula: 1/(r1 + k) + 1/(r2 + k)
+                    doc['rrf_score'] = (1.0 / (doc['initial_rank'] + rrf_k)) + \
+                                      (1.0 / (doc['ce_rank'] + rrf_k))
+                
+                # Confidence Gating: Compare CE certainty vs Bi-Encoder
+                # If CE scores have very low variance, it's just guessing. 
+                # In that case, we revert to the Bi-Encoder's original ranking.
+                if confidence_threshold > 0:
+                    score_range = np.max(ce_scores) - np.min(ce_scores)
+                    if score_range < confidence_threshold:
+                        # Reranker is unsure → Reset to first-stage order
+                        docs_with_ce.sort(key=lambda x: x['initial_rank'])
+                
+                # Final sort by RRF score
+                docs_with_ce.sort(key=lambda x: x['rrf_score'], reverse=True)
+            else:
+                # Standard reranking: sort purely by CE score
+                docs_with_ce.sort(key=lambda x: x['cross_encoder_score'], reverse=True)
             
             results[qid] = {
                 "query": data["query"],
-                "first_stage": first_stage_docs[:top_k],
-                "reranked": reranked_docs[:top_k],
+                "first_stage": first_stage_docs,
+                "reranked": docs_with_ce,
             }
             
             for key in ("original_query", "expanded_query"):

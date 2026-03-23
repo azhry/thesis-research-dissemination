@@ -5,6 +5,7 @@ This module provides functionality to fine-tune cross-encoder models
 using hard negatives and margin ranking loss for Indonesian code search.
 """
 
+import os
 import logging
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, field
@@ -27,13 +28,13 @@ class FineTuningConfig:
     """Configuration for cross-encoder fine-tuning."""
     model_name: str = "sentence-transformers/ms-marco-MiniLM-L-12-v2-cross-encoder"
     learning_rate: float = 2e-5
-    num_epochs: int = 3
+    num_epochs: int = 10
     batch_size: int = 16
     warmup_steps: int = 100
     margin: float = 0.5
     max_seq_length: int = 512
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
-    save_path: str = "./models/finetuned_ce"
+    save_path: str = "./full/models/cross-encoder-me5-small-full"
     gradient_accumulation_steps: int = 1
 
 
@@ -297,6 +298,17 @@ class CrossEncoderFineTuner:
             history['train_loss'].append(train_loss)
             
             logger.info(f"Train Loss: {train_loss:.4f}")
+            
+            # Save intermediate checkpoint
+            checkpoint_dir = os.path.join(self.config.save_path, f"checkpoint-epoch-{epoch+1}")
+            self.model.save_pretrained(checkpoint_dir)
+            self.tokenizer.save_pretrained(checkpoint_dir)
+            
+            # Also update the 'latest' model in the main save_path
+            self.model.save_pretrained(self.config.save_path)
+            self.tokenizer.save_pretrained(self.config.save_path)
+            
+            logger.info(f"Epoch {epoch+1} complete. Model saved to {self.config.save_path}")
             
             # Validate if provided
             if val_dataset:
