@@ -26,6 +26,8 @@ class RerankerModel(Enum):
     MMMINI_MULTILINGUAL = "mmmini_multilingual"
     XLM_ROBERTA = "xlm"
     MBERT = "mbert"
+    JINA_CODE = "jina_code"
+    BGE_M3 = "bge_m3"
     CUSTOM = "custom"
 
 
@@ -56,7 +58,7 @@ class PipelineConfig:
     retriever_model: str = "intfloat/multilingual-e5-small"
     retriever_batch_size: int = 32
     retriever_max_seq_length: int = 512
-    first_stage_top_k: int = 100  # Candidates for reranking
+    retrieval_depth: int = 100  # Candidates for reranking
     
     # === Query Expansion (TQE) ===
     enable_tqe: bool = True
@@ -74,9 +76,12 @@ class PipelineConfig:
     reranker_model_name: Optional[str] = None  # Auto-set from model_type if None
     reranker_max_length: int = 512
     reranker_batch_size: int = 8
-    reranker_top_k: int = 10
-    reranker_use_rrf: bool = True  # Use RRF to combine Bi-Encoder + Cross-Encoder
+    rerank_depth: int = 100  # How many candidates to rerank from first stage
+    reranker_use_rrf: bool = True
     reranker_rrf_k: int = 100
+    
+    # === Final Output ===
+    top_k: int = 100 # Number of documents to return after all stages
     
     # === Evaluation ===
     eval_k_values: List[int] = field(default_factory=lambda: [1, 5, 10, 20, 50, 100])
@@ -120,14 +125,15 @@ class PipelineConfig:
             "experiment_type": self.experiment_type.value,
             "dataset": self.dataset,
             "retriever_model": self.retriever_model,
-            "first_stage_top_k": self.first_stage_top_k,
+            "retrieval_depth": self.retrieval_depth,
             "enable_tqe": self.enable_tqe,
             "qe_method": self.qe_method.value if self.enable_tqe else None,
             "qe_num_terms": self.qe_num_terms,
             "enable_reranker": self.enable_reranker,
             "reranker_model_type": self.reranker_model_type.value if self.enable_reranker else None,
             "reranker_model_name": self.reranker_model_name,
-            "reranker_top_k": self.reranker_top_k,
+            "rerank_depth": self.rerank_depth,
+            "top_k": self.top_k,
             "eval_k_values": self.eval_k_values,
             "device": self.device,
             "sample_size": self.sample_size,
@@ -142,7 +148,9 @@ RERANKER_MODEL_MAP = {
     RerankerModel.MMMINI_MULTILINGUAL: "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
     RerankerModel.XLM_ROBERTA: "cross-encoder/stsb-roberta-base",
     RerankerModel.MBERT: "cross-encoder/ms-marco-MiniLM-L-12-v2",
-    RerankerModel.CUSTOM: str(PROJECT_DIR / "models" / "cross-encoder-me5-small-full-hn-v2"),
+    RerankerModel.JINA_CODE: "jinaai/jina-reranker-v2-base-multilingual",
+    RerankerModel.BGE_M3: "BAAI/bge-reranker-v2-m3",
+    RerankerModel.CUSTOM: str(PROJECT_DIR / "models" / "cross-encoder-cosqa"),
 }
 
 RETRIEVER_MODEL_MAP = {

@@ -54,13 +54,14 @@ def run_single_experiment(
     config = PipelineConfig(
         experiment_type=experiment_type,
         retriever_model=args.retriever_model,
-        first_stage_top_k=args.first_stage_k,
-        qe_method=QEMethod(args.qe_method),
+        retrieval_depth=args.first_stage_k,
+        qe_method=QEMethod(args.qe_method) if args.qe_method else None,
         qe_num_terms=args.qe_num_terms,
         llm_provider=args.llm_provider,
         llm_model=args.llm_model,
-        reranker_model_type=RerankerModel(args.reranker_model),
-        reranker_top_k=args.top_k,
+        reranker_model_type=RerankerModel(args.reranker_model) if args.reranker_model else None,
+        rerank_depth=50, # Narrow window for high precision
+        top_k=args.top_k,
         reranker_use_rrf=not args.reranker_no_rrf,
         reranker_rrf_k=args.reranker_rrf_k,
         device=args.device,
@@ -368,11 +369,12 @@ def main():
     parser.add_argument("--llm-model", type=str, default="models/gemini-flash-latest")
     
     # Reranker settings
-    parser.add_argument("--reranker-model", type=str, default="custom",
-                        choices=["mmmini", "mmmini_multilingual", "xlm", "mbert", "custom"])
+    parser.add_argument("--reranker-model", type=str, default="jina_code",
+                        choices=["mmmini", "mmmini_multilingual", "xlm", "mbert", "jina_code", "bge_m3", "custom"],
+                        help="Cross-encoder model type")
     parser.add_argument("--reranker-no-rrf", action="store_true", help="Disable RRF fusion")
     parser.set_defaults(reranker_use_rrf=True)
-    parser.add_argument("--reranker-rrf-k", type=int, default=60, help="RRF k parameter")
+    parser.add_argument("--reranker-rrf-k", type=int, default=100, help="RRF k parameter")
     parser.add_argument("--top-k", type=int, default=10, help="Top-K for reranking/eval")
     
     # General settings

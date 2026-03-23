@@ -155,14 +155,14 @@ class Pipeline:
         
         if self.config.enable_tqe:
             # Baseline for comparison
-            results_original = retriever.retrieve(queries=queries, corpus=corpus, top_k=self.config.first_stage_top_k, show_progress=False)
-            results_expanded = retriever.retrieve(queries=expanded_queries, corpus=corpus, top_k=self.config.first_stage_top_k, show_progress=False)
+            results_original = retriever.retrieve(queries=queries, corpus=corpus, top_k=self.config.retrieval_depth, show_progress=False)
+            results_expanded = retriever.retrieve(queries=expanded_queries, corpus=corpus, top_k=self.config.retrieval_depth, show_progress=False)
             
             # Hybrid Fusion
             first_stage_results = retriever.fuse_results(
                 results_original=results_original,
                 results_expanded=results_expanded,
-                top_k=self.config.first_stage_top_k,
+                top_k=self.config.retrieval_depth,
                 expansion_weight=0.3
             )
             
@@ -186,7 +186,7 @@ class Pipeline:
             first_stage_results = retriever.retrieve(
                 queries=queries,
                 corpus=corpus,
-                top_k=self.config.first_stage_top_k,
+                top_k=self.config.retrieval_depth,
             )
         
         # Inject rerank queries if available
@@ -204,16 +204,19 @@ class Pipeline:
             logger.info("Step 3: Cross-Encoder Re-ranking...")
             t0 = time.time()
             
+            # Collect reranking queries for the Cross-Encoder
+            # Priority: rerank_query (English translation for Indonesian) > original_query > query
+            # This ensures the Cross-Encoder always sees English text for optimal matching
             rerank_query_texts = {}
             for qid, data in first_stage_results.items():
-                # PRIORITY: 1. Manual Translation-for-Rerank > 2. Original Query > 3. Retrieval Query (HyDE)
                 rerank_query_texts[qid] = data.get("rerank_query", data.get("original_query", data["query"]))
             
             reranker = self._get_reranker()
+            logger.info(f"Step 3: Cross-Encoder Re-ranking ({language})...")
             reranked_results = reranker.rerank(
                 first_stage_results=first_stage_results,
                 queries=rerank_query_texts,
-                top_k=self.config.reranker_top_k,
+                top_k=self.config.top_k,
                 use_rrf=self.config.reranker_use_rrf,
                 rrf_k=self.config.reranker_rrf_k
             )
