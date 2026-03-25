@@ -183,7 +183,7 @@ class QueryExpander:
         self,
         method: str = "hyde",
         num_terms: int = 5,
-        embedding_model: str = "intfloat/multilingual-e5-small",
+        embedding_model: str = "intfloat/multilingual-e5-base",
         llm_provider: str = "google",
         llm_model: str = "models/gemini-flash-latest",
         llm_temperature: float = 0.7,

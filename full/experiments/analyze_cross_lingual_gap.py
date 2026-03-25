@@ -143,7 +143,7 @@ def main():
     
     evaluate_translation_overlap(queries_en, queries_id)
     
-    retriever = Retriever(model_name="intfloat/multilingual-e5-small")
+    retriever = Retriever(model_name="intfloat/multilingual-e5-base")
     evaluate_embedding_alignment(queries_en, queries_id, retriever)
     
     model_path = str(FULL_PATH / "models" / "cross-encoder-me5-small-full-hn-v1")

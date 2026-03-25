@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 def main():
     parser = argparse.ArgumentParser(description="TQE experiment: mE5 + Query Expansion")
-    parser.add_argument("--retriever-model", type=str, default="intfloat/multilingual-e5-small")
+    parser.add_argument("--retriever-model", type=str, default="intfloat/multilingual-e5-base")
     parser.add_argument("--top-k", type=int, default=100)
     parser.add_argument("--qe-method", type=str, default="embedding",
                         choices=["embedding", "hyde", "technical", "cot"])

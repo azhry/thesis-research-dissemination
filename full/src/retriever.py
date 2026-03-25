@@ -36,7 +36,7 @@ class Retriever:
     
     def __init__(
         self,
-        model_name: str = "intfloat/multilingual-e5-small",
+        model_name: str = "intfloat/multilingual-e5-base",
         device: str = "cpu",
         batch_size: int = 32,
         max_seq_length: int = 512,

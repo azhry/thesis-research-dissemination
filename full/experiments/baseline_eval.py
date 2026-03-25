@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 def main():
     parser = argparse.ArgumentParser(description="Baseline mE5-only experiment")
-    parser.add_argument("--retriever-model", type=str, default="intfloat/multilingual-e5-small")
+    parser.add_argument("--retriever-model", type=str, default="intfloat/multilingual-e5-base")
     parser.add_argument("--top-k", type=int, default=100)
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--sample-size", type=int, default=None)

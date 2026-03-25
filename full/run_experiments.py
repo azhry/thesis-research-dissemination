@@ -356,7 +356,7 @@ def main():
     )
     
     # Retriever settings
-    parser.add_argument("--retriever-model", type=str, default="intfloat/multilingual-e5-small")
+    parser.add_argument("--retriever-model", type=str, default="intfloat/multilingual-e5-base")
     parser.add_argument("--first-stage-k", type=int, default=100)
     
     # QE settings

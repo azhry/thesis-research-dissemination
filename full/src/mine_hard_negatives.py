@@ -50,7 +50,7 @@ def mine_negatives(num_queries=5000, top_k=50, num_hard_negatives=5):
     
     # Initialize Bi-Encoder
     retriever = DenseRetriever(
-        model_name="intfloat/multilingual-e5-small",
+        model_name="intfloat/multilingual-e5-base",
         device="cpu", # Change to cuda if available
         batch_size=32
     )

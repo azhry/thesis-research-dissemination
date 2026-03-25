@@ -73,7 +73,7 @@ def mine_hard_negatives_with_retriever(queries, corpus, corpus_ids, qrels_dict, 
         from sentence_transformers import SentenceTransformer
         import numpy as np
         
-        model = SentenceTransformer("intfloat/multilingual-e5-small")
+        model = SentenceTransformer("intfloat/multilingual-e5-base")
         
         # Encode queries with "query: " prefix (mE5 convention)
         query_ids = list(queries.keys())
