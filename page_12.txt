@@ -1,0 +1,11 @@
+Analisis Hasil - Findings
+▶ Cross-lingualretrieval sangat dipengaruhi kemampuan model memahami bahasa
+kueri.
+▶ Multilingual-E5 menunjukkan hasil jauh lebih baik dibanding e5-base.
+▶ Translasi membantu, tetapi masih belum mengungguli kueri asli English.
+▶ Gemma menghasilkan terjemahan yang lebih sesuai semantik dengan representasi
+embedding kode sehingga menghasilkan performa IR lebih baik dari pada
+terjemahan literal oleh OPUS.
+Multilingual embedding + LLM (Gemma) translation = kombinasi terbaik untuk Bahasa
+Indonesia.
+Azhary Arliansyah 12 / 24

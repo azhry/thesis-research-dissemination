@@ -1,0 +1,10 @@
+Analisis Hasil - Bahasa Indonesia pada Multilingual-E5-base
+Query NDCG@10
+English 0.315
+Gemma-translation 0.235
+OPUS-translation 0.213
+▶ Gemma: penurunan0.080
+▶ OPUS: penurunan0.102
+Model multilingual jauh lebih stabil terhadap variasi
+bahasa dan noise translasi.
+Azhary Arliansyah 9 / 24

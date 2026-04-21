@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code Retrieval Indonesia - Python with Multilingual E5 Embedding, TQE, and Cross-Encoder Re-ranking</title>
+<style>
+  @page {
+    size: A4;
+    margin: 2cm 2.5cm;
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 12pt;
+    line-height: 1.4;
+    color: #000;
+    max-width: 210mm;
+    margin: 0 auto;
+    padding: 2cm 2.5cm;
+  }
+
+  h1 {
+    font-size: 14pt;
+    text-align: center;
+    margin-bottom: 4pt;
+    font-weight: bold;
+    line-height: 1.3;
+  }
+
+  .author {
+    text-align: center;
+    font-size: 11pt;
+    margin-bottom: 2pt;
+  }
+
+  .affiliation {
+    text-align: center;
+    font-size: 10pt;
+    font-style: italic;
+    margin-bottom: 14pt;
+    color: #333;
+  }
+
+  h2 {
+    font-size: 11.5pt;
+    font-weight: bold;
+    margin-top: 10pt;
+    margin-bottom: 4pt;
+  }
+
+  h2::before {
+    content: none;
+  }
+
+  p {
+    text-align: justify;
+    margin-bottom: 5pt;
+    text-indent: 1.5em;
+  }
+
+  p.no-indent {
+    text-indent: 0;
+  }
+
+  .section-number {
+    font-weight: bold;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 6pt 0 8pt 0;
+    font-size: 9.5pt;
+  }
+
+  table th {
+    background-color: #f0f0f0;
+    border: 1px solid #999;
+    padding: 3pt 5pt;
+    text-align: center;
+    font-weight: bold;
+    font-size: 9pt;
+  }
+
+  table td {
+    border: 1px solid #999;
+    padding: 2.5pt 5pt;
+    text-align: center;
+    font-size: 9pt;
+  }
+
+  table td:first-child {
+    text-align: left;
+  }
+
+  .caption {
+    font-size: 9pt;
+    text-align: center;
+    margin-top: -4pt;
+    margin-bottom: 6pt;
+    font-style: italic;
+  }
+
+  ul {
+    margin-left: 2em;
+    margin-bottom: 5pt;
+  }
+
+  ul li {
+    margin-bottom: 2pt;
+    text-align: justify;
+  }
+
+  .references {
+    font-size: 9pt;
+    margin-top: 8pt;
+  }
+
+  .references p {
+    text-indent: -1.5em;
+    padding-left: 1.5em;
+    margin-bottom: 2pt;
+    font-size: 9pt;
+  }
+
+  .pipeline {
+    font-family: 'Courier New', monospace;
+    font-size: 8pt;
+    text-align: center;
+    margin: 6pt 0;
+    line-height: 1.2;
+    white-space: pre;
+    display: block;
+    background: #fafafa;
+    padding: 6pt;
+    border: 1px solid #ddd;
+  }
+
+  .fig-caption {
+    font-size: 9pt;
+    text-align: center;
+    margin-top: 2pt;
+    margin-bottom: 6pt;
+  }
+
+  .keywords {
+    font-size: 10pt;
+    margin-bottom: 10pt;
+  }
+
+  .keywords strong {
+    font-style: italic;
+  }
+
+  strong {
+    font-weight: bold;
+  }
+
+  @media print {
+    body {
+      padding: 0;
+    }
+  }
+</style>
+</head>
+<body>
+
+<h1>Code Retrieval Indonesia - Python with Multilingual E5 Embedding, TQE, and Cross-Encoder Re-ranking</h1>
+
+<div class="author">Azhary Arliansyah</div>
+<div class="author">2406385901</div>
+<div class="affiliation">Master's Program in Computer Science, University of Indonesia</div>
+
+<h2>1. Introduction</h2>
+
+<p class="no-indent">Code search is a critical task for software developer productivity, enabling efficient retrieval of relevant code snippets from large repositories using natural language queries. While English-centric code search has seen significant advances through pre-trained models, cross-lingual code search, where queries are posed in non-English languages, remains substantially underexplored. This is particularly problematic for Indonesian developers, who represent one of the fastest-growing developer communities globally yet face a significant linguistic barrier when searching through predominantly English code repositories.</p>
+
+<p>This project addresses the challenge of <strong>cross-lingual code retrieval</strong>: searching English Python code snippets using Indonesian natural language queries. The core difficulty lies in bridging the vocabulary gap between Indonesian queries (e.g., <em>"cara simpan data ke database"</em>) and English programming identifiers (e.g., <code>for</code>, <code>def</code>, <code>commit()</code>). Simple machine translation often fails to capture functional equivalence, and monolingual embedding models cannot effectively handle cross-lingual semantics.</p>
+
+<h2>2. Research Objectives</h2>
+
+<p class="no-indent">This project investigates four key research questions:</p>
+<ol>
+    <li>How does Technical Query Expansion (TQE) improve retrieval performance for Indonesian code search?</li>
+    <li>Does cross-encoder re-ranking improve precision after first-stage dense retrieval?</li>
+    <li>What is the magnitude of the cross-lingual gap between English and Indonesian queries, and can this approach reduce it?</li>
+    <li>Which combination of TQE methods and re-ranking yields optimal performance?</li>
+  </ol>
+
+<h2>3. Methodology</h2>
+
+<p><strong>First-Stage Dense Retrieval with Multilingual E5 (mE5).</strong> We leverage the Multilingual E5 embedding model (intfloat/multilingual-e5-base, 278M parameters) to encode both Indonesian queries and English code snippets into a shared 768-dimensional semantic vector space. This enables cross-lingual matching via cosine similarity without explicit translation, providing robustness against translation noise.</p>
+
+<p><strong>Technical Query Expansion (TQE) via LLMs.</strong> To bridge the vocabulary mismatch, we apply query expansion using <em>HyDE (Hypothetical Document Embeddings)</em>, an LLM generates a hypothetical English code snippet from the Indonesian query, which is then used for retrieval. Experiments are conducted with LLaMa3 model.</p>
+
+<p><strong>Second-Stage Cross-Encoder Re-ranking.</strong> After retrieving the top-K candidates, a cross-encoder model jointly processes query-code pairs to capture fine-grained token-level interactions that dual-encoders miss. We evaluate multilingual cross-encoders including mmarco-mMiniLMv2-L12, with Reciprocal Rank Fusion (RRF) for combining retrieval signals.</p>
+
+<h2>4. Experimental Setup</h2>
+
+<p class="no-indent">The approach is evaluated on the <strong>CoSQA dataset</strong> (20,204 human-annotated Python code-query pairs) with 500 queries being translated to Indonesian. Four configurations are tested: Baseline (mE5 only), TQE-Only (mE5 + Query Expansion), Rerank-Only (mE5 + Cross-Encoder), and Full Pipeline (mE5 + TQE + Cross-Encoder). Performance is measured using nDCG@10, MAP@10, Recall@10, and MRR.</p>
+
+<h2>References</h2>
+
+<div class="references">
+<p>Li et al., "COIR: A Comprehensive Benchmark for Code Information Retrieval Models," <em>ACL</em>, 2025.</p>
+<p>Huang et al., "CoSQA: 20,000+ Web Queries for Code Search and Question Answering," <em>ACL</em>, 2021.</p>
+<p>Wang et al., "Multilingual E5 Text Embeddings: A Technical Report," <em>arXiv</em>, 2024.</p>
+<p>Wang et al., "Query2doc: Query Expansion with Large Language Models," <em>EMNLP</em>, 2023.</p>
+<p>Gao et al., "Precise Zero-Shot Dense Retrieval without Relevance Labels (HyDE)," <em>ACL</em>, 2023.</p>
+<p>Kar et al., "What Drives Cross-lingual Ranking?" <em>arXiv</em>, 2025.</p>
+</div>
+
+</body>
+</html>

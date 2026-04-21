@@ -34,7 +34,7 @@ class FineTuningConfig:
     margin: float = 0.5
     max_seq_length: int = 512
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
-    save_path: str = "./full/models/cross-encoder-me5-small-full"
+    save_path: str = "./full/models/cross-encoder-me5-base-full"
     gradient_accumulation_steps: int = 1
 
 

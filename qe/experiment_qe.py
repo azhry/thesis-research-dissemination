@@ -63,12 +63,12 @@ def run_embedding_qe(queries: Dict[str, str], corpus: List[Dict[str, str]], top_
     
     # Initialize expander
     expander = CrossLingualEmbeddingExpander(
-        model_name="intfloat/multilingual-e5-small"
+        model_name="intfloat/multilingual-e5-base"
     )
     
     # Initialize retriever
     retriever = DenseRetriever(
-        model_name="intfloat/multilingual-e5-small",
+        model_name="intfloat/multilingual-e5-base",
         device="cpu"
     )
     
@@ -102,7 +102,7 @@ def run_baseline(queries: Dict[str, str], corpus: List[Dict[str, str]], top_k: i
     logger.info("Running baseline retrieval...")
     
     retriever = DenseRetriever(
-        model_name="intfloat/multilingual-e5-small",
+        model_name="intfloat/multilingual-e5-base",
         device="cpu"
     )
     
