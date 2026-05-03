@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Research: Cross-Lingual Code Retrieval ID-EN</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- KaTeX for Mathematics -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    {left: "$$", right: "$$", display: true},
+                    {left: "$", right: "$", display: false},
+                    {left: "\\(", right: "\\)", display: false},
+                    {left: "\\[", right: "\\]", display: true}
+                ],
+                throwOnError : false
+            });
+        });
+    </script>
+
+    <style>
+        :root {
+            --bg: #ffffff;
+            --text: #000000;
+            --primary: #0000ff;
+            --secondary: #008000;
+            --accent: #808080;
+            --border: #000000;
+            --mono: 'JetBrains Mono', monospace;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            padding: 80px 0;
+            word-wrap: break-word;
+        }
+
+        .container { max-width: 850px; margin: 0 auto; padding: 0 40px; }
+
+        /* Header */
+        header { border-bottom: 3px solid var(--border); padding-bottom: 40px; margin-bottom: 60px; }
+        h1 { font-size: 36px; font-weight: 700; line-height: 1.1; margin-bottom: 12px; letter-spacing: -0.03em; }
+        .authors { font-family: var(--mono); font-size: 14px; margin-top: 24px; }
+        .affiliation { color: var(--accent); font-size: 14px; margin-top: 4px; }
+
+        /* Typography */
+        h2 { font-size: 22px; font-weight: 700; margin: 64px 0 24px; text-transform: uppercase; border-bottom: 1px solid var(--text); width: 100%; padding-bottom: 4px; }
+        h3 { font-size: 17px; font-weight: 700; margin: 36px 0 16px; font-family: var(--mono); color: var(--primary); }
+        
+        p { margin-bottom: 24px; text-align: justify; }
+        ul { margin-bottom: 24px; padding-left: 20px; }
+        li { margin-bottom: 10px; }
+
+        .mono { font-family: var(--mono); font-size: 0.9em; background: #f6f8fa; padding: 2px 6px; border: 1px solid #ddd; border-radius: 3px; }
+
+        /* Math Blocks */
+        .math-block { margin: 40px 0; text-align: center; background: #ffffff; padding: 32px; border: 1px solid var(--border); }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; margin: 40px 0; font-family: var(--mono); font-size: 13px; }
+        th { text-align: left; border-top: 2px solid var(--text); border-bottom: 1px solid var(--text); padding: 14px 10px; font-weight: 700; }
+        td { border-bottom: 1px solid #eee; padding: 12px 10px; }
+        tr.highlight { background: #f4f7ff; }
+        .gain { color: var(--secondary); font-weight: 700; }
+
+        /* SVG Diagram */
+        .diagram-wrapper {
+            margin: 60px 0;
+            padding: 40px;
+            background: #ffffff;
+            border: 2px solid var(--border);
+            display: flex;
+            justify-content: center;
+        }
+
+        /* Box Components */
+        .box { border: 1px solid var(--text); padding: 24px; margin: 32px 0; }
+        .box-title { font-family: var(--mono); font-weight: 700; font-size: 12px; margin-bottom: 16px; background: var(--text); color: #fff; padding: 4px 10px; display: inline-block; }
+
+        /* Footer */
+        footer { margin-top: 100px; padding-top: 40px; border-top: 1px solid #eee; font-size: 11px; color: var(--accent); font-family: var(--mono); }
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        
+        <header>
+            <p style="font-family: var(--mono); font-size: 12px; margin-bottom: 16px;">[ RESEARCH_DISSEMINATION / ID-EN_CODE_SEARCH ]</p>
+            <h1>Cross-Lingual Code Retrieval Bahasa Indonesia-Python Berbasis Multilingual E5 Embedding</h1>
+            <div class="authors"><strong>Azhary Arliansyah</strong></div>
+            <div class="affiliation">Magister Ilmu Komputer, Universitas Indonesia</div>
+        </header>
+
+        <section>
+            <h2>01 Abstract</h2>
+            <p>Penelitian ini mengeksplorasi efektivitas model <strong>Multilingual E5 (mE5)</strong> dalam menjembatani kesenjangan performa (cross-lingual gap) pada tugas pencarian kode sumber menggunakan Bahasa Indonesia. Saya mengusulkan arsitektur <i>Two-Stage Pipeline</i> yang mengintegrasikan <strong>Technical Query Expansion (TQE) HyDE</strong> dan <strong>MiniLM Cross-Encoder</strong>. Hasil pengujian pada korpus CoSQA menunjukkan peningkatan nDCG@10 sebesar <strong>+0.056</strong>, yang mereduksi <strong>66.7%</strong> dari total kesenjangan performa dibandingkan kueri Inggris asli.</p>
+        </section>
+
+        <section>
+            <h2>02 Problem Definition</h2>
+            <p>Pencarian kode lintas bahasa (Indonesia ke Python) menghadapi tantangan unik berupa <strong>mismatch semantik</strong>. Istilah teknis seringkali mengalami korupsi makna saat proses translasi atau encoding langsung.</p>
+            <ul>
+                <li><strong>Baseline Gap:</strong> Penurunan nDCG@10 sebesar $0.302 - 0.218 = 0.084$ pada model mE5-base tanpa optimasi.</li>
+                <li><strong>Vocabulary Mismatch:</strong> Token teknis penting berubah menjadi kata umum (e.g., <i>fits</i> &rarr; <i>cocok</i>).</li>
+                <li><strong>Structural Awareness:</strong> Model bi-encoder standar gagal menangkap dependensi token struktural yang kompleks.</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>03 Tinjauan Pustaka & Dataset</h2>
+            <h3>Dataset CoSQA (Huang et al., 2021)</h3>
+            <p><strong>Code Search and Question Answering (CoSQA)</strong> adalah dataset yang terdiri dari 20.604 pasangan kueri bahasa alami dan snippet kode Python. Dataset ini dikumpulkan dari log pencarian Microsoft Bing, mencerminkan kebutuhan nyata developer.</p>
+            
+            <div class="box" style="background: #f9f9f9; border-left: 4px solid var(--text);">
+                <div style="font-family: var(--mono); font-size: 11px; color: var(--accent); margin-bottom: 8px;">COSQA_RECORD_EXAMPLE</div>
+                <p style="font-size: 13px; margin-bottom: 8px;"><strong>Query:</strong> "python get last element of list"</p>
+                <p style="font-size: 13px; margin-bottom: 8px;"><strong>Code:</strong></p>
+                <pre class="mono" style="background: #000; color: #fff; padding: 12px; font-size: 12px;">def get_last(lst):
+    return lst[-1] if lst else None</pre>
+            </div>
+            
+            <h3>Baseline Performa (English Context)</h3>
+            <p>Sebelum optimasi lintas bahasa, penulis mengevaluasi model mE5 pada dataset CoSQA asli (Inggris) untuk menetapkan baseline performa:</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>MODEL</th>
+                        <th>ARSITEKTUR</th>
+                        <th>CoSQA (MRR)</th>
+                        <th>CoIR (nDCG@10)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>BM25</td>
+                        <td>Lexical</td>
+                        <td>0.442</td>
+                        <td>0.231</td>
+                    </tr>
+                    <tr>
+                        <td>CodeBERT</td>
+                        <td>Encoder-only</td>
+                        <td>0.589</td>
+                        <td>0.302</td>
+                    </tr>
+                    <tr>
+                        <td>GraphCodeBERT</td>
+                        <td>Structure-aware</td>
+                        <td>0.612</td>
+                        <td>0.315</td>
+                    </tr>
+                    <tr class="highlight">
+                        <td><strong>mE5-base</strong></td>
+                        <td><strong>Bi-Encoder</strong></td>
+                        <td><strong>0.634</strong></td>
+                        <td><strong>0.326</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section>
+            <h2>04 Konfigurasi Eksperimen</h2>
+            <p>Sistem diimplementasikan menggunakan framework modern untuk memastikan skalabilitas dan reproduksibilitas hasil.</p>
+            <div class="box">
+                <div class="box-title">System Settings</div>
+                <ul style="font-family: var(--mono); font-size: 13px; list-style: none; padding-left: 0;">
+                    <li><strong>Embedding Model:</strong> <span class="mono">intfloat/multilingual-e5-base</span> (768 dimensi).</li>
+                    <li><strong>Reranker Model:</strong> <span class="mono">cross-encoder/ms-marco-MiniLM-L-6-v2</span>.</li>
+                    <li><strong>Expansion Engine:</strong> Google Gemini Flash (Zero-shot HyDE).</li>
+                    <li><strong>Retriever Index:</strong> FAISS (Inner Product similarity).</li>
+                    <li><strong>Hardware:</strong> CPU-based inference.</li>
+                </ul>
+            </div>
+        </section>
+
+        <section>
+            <h2>05 System Architecture</h2>
+            <div class="diagram-wrapper">
+                <svg width="600" height="420" viewBox="0 0 600 420" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <marker id="arr" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+                            <path d="M0,0 L10,5 L0,10 Z" fill="#000" />
+                        </marker>
+                    </defs>
+                    <rect x="200" y="10" width="200" height="40" fill="none" stroke="#000" stroke-width="2" />
+                    <text x="300" y="35" font-family="Inter" font-size="12" text-anchor="middle" font-weight="700">Kueri Bahasa Indonesia ($q_{id}$)</text>
+                    <rect x="200" y="80" width="200" height="50" fill="#00f" stroke="#000" stroke-width="2" />
+                    <text x="300" y="105" font-family="Inter" font-size="12" text-anchor="middle" fill="#fff" font-weight="700">Tahap 0: TQE (HyDE)</text>
+                    <line x1="300" y1="50" x2="300" y2="72" stroke="#000" stroke-width="2" marker-end="url(#arr)" />
+                    <rect x="200" y="160" width="200" height="50" fill="none" stroke="#000" stroke-width="2" />
+                    <text x="300" y="185" font-family="Inter" font-size="12" text-anchor="middle" font-weight="700">Tahap 1: Retriever (mE5)</text>
+                    <line x1="300" y1="130" x2="300" y2="152" stroke="#000" stroke-width="2" marker-end="url(#arr)" />
+                    <line x1="300" y1="210" x2="300" y2="242" stroke="#000" stroke-width="2" marker-end="url(#arr)" />
+                    <rect x="200" y="250" width="200" height="50" fill="#e6ffed" stroke="#008000" stroke-width="2" />
+                    <text x="300" y="275" font-family="Inter" font-size="12" text-anchor="middle" font-weight="700">Tahap 2: Reranker</text>
+                    <line x1="300" y1="300" x2="300" y2="322" stroke="#000" stroke-width="2" marker-end="url(#arr)" />
+                    <rect x="200" y="330" width="200" height="40" fill="none" stroke="#000" stroke-width="2" />
+                    <text x="300" y="355" font-family="Inter" font-size="12" text-anchor="middle" font-weight="700">Relevant Code Snippets</text>
+                </svg>
+            </div>
+
+            <h3>Tahap 0: Technical Query Expansion (HyDE)</h3>
+            <p>HyDE memetakan kueri zero-shot ke ruang dokumen semu menggunakan probabilitas token LLM:</p>
+            <div class="math-block">
+                $$P(Y | X) = \prod_{t=1}^{T} P(y_t | y_{&lt;t}, X)$$
+            </div>
+
+            <div style="margin-top: 32px;">
+                <h3>Tahap 1: Dense Retrieval (mE5)</h3>
+                <p>Menggunakan arsitektur <strong>Bi-Encoder</strong> untuk mengencode kueri ekspansi dan dokumen ke dalam manifold semantik yang sama menggunakan model <span class="mono">multilingual-e5-base</span>.</p>
+            </div>
+
+            <div style="margin-top: 32px;">
+                <h3>Tahap 2: Cross-Encoder Reranking (MiniLM)</h3>
+                <p>Memproses pasangan (kueri, kode) secara bersamaan untuk menangkap <strong>Joint Attention</strong> antar token, meminimalkan <i>false positives</i> dari tahap retrieval.</p>
+            </div>
+        </section>
+
+        <section>
+            <h2>06 Experimental Results</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>KONFIGURASI</th>
+                        <th>nDCG@10 (EN)</th>
+                        <th>nDCG@10 (ID)</th>
+                        <th>GAIN (ID)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Baseline (mE5 only)</td>
+                        <td>0.302</td>
+                        <td>0.218</td>
+                        <td>-</td>
+                    </tr>
+                    <tr>
+                        <td>+TQE (HyDE)</td>
+                        <td>0.310</td>
+                        <td>0.234</td>
+                        <td class="gain">+0.016</td>
+                    </tr>
+                    <tr class="highlight">
+                        <td><strong>Proposed Pipeline (mE5 + HyDE + Reranker)</strong></td>
+                        <td><strong>0.344</strong></td>
+                        <td><strong>0.274</strong></td>
+                        <td class="gain">+0.056</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section>
+            <h2>07 Discussion: Paradoks Embedding Drift</h2>
+            <p>Analisis Pearson menunjukkan korelasi rendah ($r \approx 0.037$) antara <strong>Embedding Drift</strong> dengan performa retrieval. Hal ini membuktikan bahwa kedekatan kueri ke <strong>distribusi kode</strong> jauh lebih penting daripada kedekatan linguistik ke kueri Inggris.</p>
+        </section>
+
+        <section>
+            <h2>08 References</h2>
+            <div style="font-family: var(--mono); font-size: 12px; color: var(--accent);">
+                <p>[1] Huang, S., et al. (2021). "CoSQA: 20,000+ Web Queries for Code Search and Question Answering". ACL.</p>
+                <p>[2] Li, X., et al. (2025). "CoIR: A Comprehensive Benchmark for Code Information Retrieval". arXiv.</p>
+                <p>[3] Wang, L., et al. (2024). "Multilingual E5 Text Embeddings". arXiv.</p>
+                <p>[4] Gao, L., et al. (2022). "Precise Zero-Shot Dense Retrieval (HyDE)". ACL.</p>
+            </div>
+        </section>
+
+        <footer>
+            &gt; SECTIONS: 08<br>
+            &gt; AUTHOR: AZHARY ARLIANSYAH<br>
+            &gt; BUILD: 2026-05-04
+        </footer>
+
+    </div>
+
+</body>
+</html>

@@ -47,12 +47,13 @@ def main():
     config = PipelineConfig(
         experiment_type=ExperimentType.FULL,
         retriever_model=args.retriever_model,
-        first_stage_top_k=args.first_stage_k,
+        retrieval_depth=args.first_stage_k,
         qe_method=QEMethod(args.qe_method),
         qe_num_terms=args.qe_num_terms,
         reranker_model_type=RerankerModel(args.reranker_model),
-        reranker_top_k=args.top_k,
+        top_k=args.top_k,
         device=args.device,
+        sample_size=args.sample_size,
     )
     
     pipeline = Pipeline(config)
@@ -70,6 +71,56 @@ def main():
         json.dump(serializable, f, indent=2, default=str)
     
     logger.info(f"Full pipeline results saved to {output_path}")
+    
+    # --- Qualitative Trace ---
+    trace_path = output_path.parent / "full_pipeline_trace.json"
+    trace_data = []
+    
+    # We focus on Indonesian queries for qualitative analysis
+    indo_results = results.get("indonesian", {})
+    raw_results = indo_results.get("raw_results", {})
+    expanded_queries = indo_results.get("expanded_queries", {})
+    
+    # Sample up to 20 queries for the trace to keep file size reasonable
+    trace_qids = list(raw_results.keys())[:20]
+    
+    for qid in trace_qids:
+        query_data = raw_results[qid]
+        expanded_q = expanded_queries.get(qid, "")
+        
+        # Get ground truth relevant docs
+        relevant_docs = list(qrels.get(qid, {}).keys())
+        
+
+        trace_entry = {
+            "qid": qid,
+            "query_id": queries_id.get(qid),
+            "query_en": queries_en.get(qid),
+            "expanded_query": expanded_q,
+            "relevant_doc_ids": relevant_docs,
+            "top_results": []
+        }
+        
+        # Get content for top 10 results
+        for res in query_data.get("results", [])[:10]:
+            doc_id = res["doc_id"]
+            doc_data = corpus.get(doc_id, {})
+            
+            trace_entry["top_results"].append({
+                "doc_id": doc_id,
+                "score": res["score"],
+                "rank": res["rank"],
+                "is_relevant": doc_id in relevant_docs,
+                "title": doc_data.get("title", ""),
+                "text": doc_data.get("text", "")[:500] + "..." if len(doc_data.get("text", "")) > 500 else doc_data.get("text", "")
+            })
+            
+        trace_data.append(trace_entry)
+        
+    with open(trace_path, "w") as f:
+        json.dump(trace_data, f, indent=2)
+        
+    logger.info(f"Qualitative trace saved to {trace_path}")
     
     for lang in ["english", "indonesian"]:
         metrics = results[lang]["metrics"]
