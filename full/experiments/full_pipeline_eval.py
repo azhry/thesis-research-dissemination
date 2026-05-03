@@ -109,14 +109,22 @@ def main():
             doc_id = res["id"]
             doc_data = corpus.get(doc_id, {})
             
-            trace_entry["top_results"].append({
+            result_entry = {
                 "doc_id": doc_id,
                 "score": res["score"],
                 "rank": res["rank"],
                 "is_relevant": doc_id in relevant_docs,
                 "title": doc_data.get("title", ""),
                 "text": doc_data.get("text", "")[:500] + "..." if len(doc_data.get("text", "")) > 500 else doc_data.get("text", "")
-            })
+            }
+            
+            # Add reranking specific scores if available
+            if "cross_encoder_score" in res:
+                result_entry["cross_encoder_score"] = res["cross_encoder_score"]
+            if "rrf_score" in res:
+                result_entry["rrf_score"] = res["rrf_score"]
+                
+            trace_entry["top_results"].append(result_entry)
             
         trace_data.append(trace_entry)
         
