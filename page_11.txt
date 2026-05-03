@@ -1,9 +1,0 @@
-Analisis Hasil - E5-base-v2 vs Multilingual-E5-base
-Pada kueri Bahasa Indonesia (Gemma translation):
-Model NDCG@10 (Indo)
-e5-base-v2 0.135
-multilingual-e5-base 0.235
-▶ Multilingual-E5 menang signifikan.
-▶ Model monolingual gagal melakukanalignmentantar bahasa.
-Kemampuan multilingual lebih cocok untuk cross-lingual IR.
-Azhary Arliansyah 11 / 24

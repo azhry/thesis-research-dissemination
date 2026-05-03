@@ -36,3 +36,4 @@ hyde_results_v2.json
 Detailed_results.csv
 qualitative_reranking*.json
 full_experiment_results.json
+.venv

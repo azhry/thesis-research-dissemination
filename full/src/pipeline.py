@@ -241,6 +241,7 @@ class Pipeline:
             "metrics": eval_metrics,
             "timing": timing,
             "diagnostics": diagnostics,
+            "expanded_queries": expanded_queries,
             "raw_results": reranked_results if reranked_results else first_stage_results
         }
 
