@@ -18,7 +18,7 @@ class QEConfig:
     # Model settings
     DEFAULT_EMBEDDING_MODEL = "intfloat/multilingual-e5-large-instruct"
     EMBEDDING_MODELS = {
-        "small": "intfloat/multilingual-e5-small",
+        "small": "intfloat/multilingual-e5-base",
         "base": "intfloat/multilingual-e5-base",
         "large": "intfloat/multilingual-e5-large-instruct",
     }

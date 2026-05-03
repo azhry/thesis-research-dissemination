@@ -249,7 +249,7 @@ metrics = evaluate_retrieval(
 
 | Model | Parameters | Description |
 |-------|------------|-------------|
-| `intfloat/multilingual-e5-small` | 118M | Lightweight multilingual embeddings |
+| `intfloat/multilingual-e5-base` | 278M | Medium-size multilingual embeddings (Standard) |
 | `intfloat/multilingual-e5-base` | 278M | Medium-size multilingual embeddings |
 | `intfloat/multilingual-e5-large-instruct` | 560M | **Recommended** - Best performance with instruction tuning |
 

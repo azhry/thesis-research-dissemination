@@ -98,7 +98,7 @@ def run_first_stage_retrieval(queries: Dict[str, str], corpus: List[Dict], top_k
     logger.info("Running first-stage retrieval with mE5...")
     
     retriever = DenseRetriever(
-        model_name="intfloat/multilingual-e5-small",
+        model_name="intfloat/multilingual-e5-base",
         device="cpu"
     )
     

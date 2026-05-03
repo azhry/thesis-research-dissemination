@@ -24,7 +24,7 @@ class EmbeddingExpander:
     
     def __init__(
         self,
-        model_name: str = "intfloat/multilingual-e5-small",
+        model_name: str = "intfloat/multilingual-e5-base",
         device: Optional[str] = None,
     ):
         """

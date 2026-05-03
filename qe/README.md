@@ -38,13 +38,13 @@ from qe.coir.embedding_expander import CrossLingualEmbeddingExpander
 from qe.coir.dense_retriever import DenseRetriever
 
 # Initialize expander
-expander = CrossLingualEmbeddingExpander(model_name="intfloat/multilingual-e5-small")
+expander = CrossLingualEmbeddingExpander(model_name="intfloat/multilingual-e5-base")
 
 # Expand query
 expansion = expander.expand("cara membuat fungsi di python", num_terms=5)
 
 # Retrieve
-retriever = DenseRetriever(model_name="intfloat/multilingual-e5-small", device="cpu")
+retriever = DenseRetriever(model_name="intfloat/multilingual-e5-base", device="cpu")
 results = retriever.retrieve(queries=[expansion.expanded_query], corpus=code_corpus, top_k=10)
 ```
 

@@ -60,7 +60,7 @@ python full/run_experiments.py --experiments tqe_only full --sample-size 10
 # Full pipeline with specific models
 python full/run_experiments.py \
     --experiments full \
-    --retriever-model intfloat/multilingual-e5-small \
+    --retriever-model intfloat/multilingual-e5-base \
     --qe-method embedding \
     --reranker-model mmmini \
     --sample-size 10
@@ -89,8 +89,8 @@ To fine-tune the multilingual E5 model as a cross-encoder on the CoSQA dataset:
 
 ```bash
 python full/finetune_cross_encoder.py \
-    --model-name intfloat/multilingual-e5-small \
-    --output-dir ./full/models/cross-encoder-me5-small \
+    --model-name intfloat/multilingual-e5-base \
+    --output-dir ./full/models/cross-encoder-me5-base \
     --num-epochs 3 \
     --batch-size 16
 ```
@@ -110,7 +110,7 @@ python full/run_experiments.py \
 | Argument | Default | Description |
 |----------|---------|-------------|
 | `--experiments` | all 4 | Which experiments to run |
-| `--retriever-model` | `intfloat/multilingual-e5-small` | mE5 model variant |
+| `--retriever-model` | `intfloat/multilingual-e5-base` | mE5 model variant |
 | `--first-stage-k` | 100 | Number of candidates for reranking |
 | `--qe-method` | `hyde` | QE method: embedding, hyde, technical, cot, translation |
 | `--qe-num-terms` | 5 | Number of expansion terms |

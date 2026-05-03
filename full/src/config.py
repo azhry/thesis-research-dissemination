@@ -55,7 +55,7 @@ class PipelineConfig:
     dataset: str = "cosqa"
     
     # === First-stage retrieval (mE5) ===
-    retriever_model: str = "intfloat/multilingual-e5-small"
+    retriever_model: str = "intfloat/multilingual-e5-base"
     retriever_batch_size: int = 32
     retriever_max_seq_length: int = 512
     retrieval_depth: int = 100  # Candidates for reranking
@@ -154,7 +154,10 @@ RERANKER_MODEL_MAP = {
 }
 
 RETRIEVER_MODEL_MAP = {
-    "small": "intfloat/multilingual-e5-small",
+    # MODELS
+    # intfloat/multilingual-e5-small: 384 dimensions
+    # intfloat/multilingual-e5-base: 768 dimensions
+    "small": "intfloat/multilingual-e5-base", # Changed from small to base
     "base": "intfloat/multilingual-e5-base",
     "large": "intfloat/multilingual-e5-large-instruct",
 }

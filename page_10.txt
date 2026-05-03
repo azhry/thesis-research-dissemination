@@ -1,0 +1,16 @@
+Analisis Hasil - Gemma vs OPUS Translation
+Model Gemma OPUS Pemenang
+e5-base-v2 0.135 0.077 Gemma
+multilingual-e5 0.235 0.213 Gemma
+▶ OPUS melakukan translasi secara literal.
+▶ Gemma menghasilkan translasi yang:
+▶ lebih natural
+▶ lebih sesuai formulasi manusia
+▶ lebih kaya semantik.
+Translasi Gemma yang lebih natural dan semantik
+membuat embedding kueri lebihsimilardengan
+representasi embedding kode, sehingga retrieval lebih
+relevan dan NDCG@10 lebih tinggi
+(a) E5 Embedding Drift
+(b) Multilingual E5 Embedding Drift
+Azhary Arliansyah 10 / 24
