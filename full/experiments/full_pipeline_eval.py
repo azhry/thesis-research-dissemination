@@ -102,8 +102,11 @@ def main():
         }
         
         # Get content for top 10 results
-        for res in query_data.get("results", [])[:10]:
-            doc_id = res["doc_id"]
+        # Keys depend on whether reranking was used ("reranked") or only retrieval ("retrieved")
+        top_results = query_data.get("reranked", query_data.get("retrieved", []))
+        
+        for res in top_results[:10]:
+            doc_id = res["id"]
             doc_data = corpus.get(doc_id, {})
             
             trace_entry["top_results"].append({
