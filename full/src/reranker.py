@@ -147,7 +147,14 @@ class Reranker:
             batch_size=self.batch_size,
             show_progress_bar=False,
         )
-        return np.array(scores)
+        
+        # Convert raw logits to probabilities (0.0 to 1.0) using sigmoid.
+        # This is CRITICAL because the pipeline expects probabilities for RRF fusion,
+        # but newer sentence-transformers versions return raw logits by default.
+        scores_arr = np.array(scores)
+        probabilities = 1 / (1 + np.exp(-scores_arr))
+        
+        return probabilities
     
     def rerank(
         self,

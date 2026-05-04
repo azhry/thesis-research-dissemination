@@ -72,61 +72,59 @@ def main():
     
     logger.info(f"Full pipeline results saved to {output_path}")
     
-    # --- Qualitative Trace ---
+    # --- Qualitative Trace (both languages) ---
     trace_path = output_path.parent / "full_pipeline_trace.json"
-    trace_data = []
+    trace_data = {}
     
-    # We focus on Indonesian queries for qualitative analysis
-    indo_results = results.get("indonesian", {})
-    raw_results = indo_results.get("raw_results", {})
-    expanded_queries = indo_results.get("expanded_queries", {})
-    
-    # Sample up to 20 queries for the trace to keep file size reasonable
-    trace_qids = list(raw_results.keys())[:20]
-    
-    for qid in trace_qids:
-        query_data = raw_results[qid]
-        expanded_q = expanded_queries.get(qid, "")
+    for lang in ["english", "indonesian"]:
+        lang_results = results.get(lang, {})
+        raw_results = lang_results.get("raw_results", {})
+        expanded_queries = lang_results.get("expanded_queries", {})
         
-        # Get ground truth relevant docs
-        relevant_docs = list(qrels.get(qid, {}).keys())
+        lang_trace = []
+        # Sample up to 20 queries for the trace
+        trace_qids = list(raw_results.keys())[:20]
         
-
-        trace_entry = {
-            "qid": qid,
-            "query_id": queries_id.get(qid),
-            "query_en": queries_en.get(qid),
-            "expanded_query": expanded_q,
-            "relevant_doc_ids": relevant_docs,
-            "top_results": []
-        }
-        
-        # Get content for top 10 results
-        # Keys depend on whether reranking was used ("reranked") or only retrieval ("retrieved")
-        top_results = query_data.get("reranked", query_data.get("retrieved", []))
-        
-        for res in top_results[:10]:
-            doc_id = res["id"]
-            doc_data = corpus.get(doc_id, {})
+        for qid in trace_qids:
+            query_data = raw_results[qid]
+            expanded_q = expanded_queries.get(qid, "")
+            relevant_docs = list(qrels.get(qid, {}).keys())
             
-            result_entry = {
-                "doc_id": doc_id,
-                "score": res["score"],
-                "rank": res["rank"],
-                "is_relevant": doc_id in relevant_docs,
-                "title": doc_data.get("title", ""),
-                "text": doc_data.get("text", "")[:500] + "..." if len(doc_data.get("text", "")) > 500 else doc_data.get("text", "")
+            trace_entry = {
+                "qid": qid,
+                "query_id": queries_id.get(qid),
+                "query_en": queries_en.get(qid),
+                "expanded_query": expanded_q,
+                "relevant_doc_ids": relevant_docs,
+                "top_results": []
             }
             
-            # Add reranking specific scores if available
-            if "cross_encoder_score" in res:
-                result_entry["cross_encoder_score"] = res["cross_encoder_score"]
-            if "rrf_score" in res:
-                result_entry["rrf_score"] = res["rrf_score"]
-                
-            trace_entry["top_results"].append(result_entry)
+            top_results = query_data.get("reranked", query_data.get("retrieved", []))
             
-        trace_data.append(trace_entry)
+            for i, res in enumerate(top_results[:10]):
+                doc_id = res["id"]
+                doc_data = corpus.get(doc_id, {})
+                
+                result_entry = {
+                    "doc_id": doc_id,
+                    "final_rank": i + 1,
+                    "initial_rank": res.get("initial_rank", "N/A"),
+                    "retrieval_score": res.get("score", 0),
+                    "is_relevant": doc_id in relevant_docs,
+                    "text": doc_data.get("text", "")[:500] + "..." if len(doc_data.get("text", "")) > 500 else doc_data.get("text", "")
+                }
+                
+                # Add reranking specific scores if available
+                if "cross_encoder_score" in res:
+                    result_entry["ce_score"] = res["cross_encoder_score"]
+                if "rrf_score" in res:
+                    result_entry["rrf_score"] = res["rrf_score"]
+                    
+                trace_entry["top_results"].append(result_entry)
+                
+            lang_trace.append(trace_entry)
+        
+        trace_data[lang] = lang_trace
         
     with open(trace_path, "w") as f:
         json.dump(trace_data, f, indent=2)

@@ -78,6 +78,9 @@ def run_single_experiment(
 def save_qualitative_reranking(
     all_results: Dict[str, Dict[str, Any]],
     output_dir: Path,
+    queries_en: Dict[str, str] = None,
+    queries_id: Dict[str, str] = None,
+    qrels: Dict = None,
     num_queries: int = 20,
     top_k: int = 10,
 ):
@@ -98,28 +101,37 @@ def save_qualitative_reranking(
             for qid, data in list(raw.items())[:num_queries]:
                 query = data.get("query", "")
                 
+                # Get ground truth relevant docs
+                relevant_docs = set(qrels.get(qid, {}).keys()) if qrels else set()
+                
                 before_docs = data.get("first_stage", [])[:top_k]
                 after_docs = data.get("reranked", [])[:top_k]
                 
                 examples[lang][qid] = {
+                    "query_id": queries_id.get(qid, "") if queries_id else "",
+                    "query_en": queries_en.get(qid, "") if queries_en else "",
                     "original_query": data.get("original_query", query),
                     "expanded_query": data.get("expanded_query", query),
+                    "relevant_doc_ids": list(relevant_docs),
                     f"before_reranking_top{top_k}": [
                         {
                             "rank": i+1, 
                             "id": d.get("id"), 
-                            "score": round(d.get("score", 0), 4),
-                            # Truncate text for readability
-                            "text": d.get("text", "")[:150].replace("\n", " ") + "..."
+                            "retrieval_score": round(d.get("score", 0), 4),
+                            "is_relevant": d.get("id") in relevant_docs,
+                            "text": d.get("text", "")[:300].replace("\n", " ") + "..."
                         } 
                         for i, d in enumerate(before_docs)
                     ],
                     f"after_reranking_top{top_k}": [
                         {
-                            "rank": i+1, 
+                            "final_rank": i+1, 
+                            "initial_rank": d.get("initial_rank", "N/A"),
                             "id": d.get("id"), 
                             "ce_score": round(d.get("cross_encoder_score", 0), 4),
-                            "text": d.get("text", "")[:150].replace("\n", " ") + "..."
+                            "rrf_score": round(d.get("rrf_score", 0), 4) if "rrf_score" in d else None,
+                            "is_relevant": d.get("id") in relevant_docs,
+                            "text": d.get("text", "")[:300].replace("\n", " ") + "..."
                         }
                         for i, d in enumerate(after_docs)
                     ]
@@ -440,7 +452,11 @@ def main():
     logger.info(f"Results saved to {output_path}")
     
     # Save qualitative examples before/after reranking side-by-side
-    save_qualitative_reranking(all_results, output_path.parent, top_k=args.top_k)
+    save_qualitative_reranking(
+        all_results, output_path.parent,
+        queries_en=queries_en, queries_id=queries_id, qrels=qrels,
+        top_k=args.top_k
+    )
     
     # Save detailed CSV
     save_detailed_csv(all_results, output_path.parent, queries_en)
